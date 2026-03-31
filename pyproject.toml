@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "job-searcher"
+version = "0.1.0"
+description = "Standalone job-hunter scraper for collecting and evaluating consultancy client vacancies."
+requires-python = ">=3.8"
+dependencies = [
+    "playwright==1.48.0",
+]
+
+[project.scripts]
+fetch-jobs = "fetch_jobs:main"

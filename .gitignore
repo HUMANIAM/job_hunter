@@ -1,0 +1,13 @@
+# Local environment
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Packaging and build output
+build/
+*.egg-info/
+
+# Generated scraper artifacts
+vacancies/
