@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from playwright.sync_api import Browser, Page
+from shared.normalizer import normalize_text
 
 START_URL = "https://vacancy.sioux.eu/"
 BASE_URL = "https://vacancy.sioux.eu"
@@ -28,11 +29,6 @@ class SiouxRetrievalResult:
 def log(message: str) -> None:
     now = time.strftime("%H:%M:%S")
     print(f"[{now}] {message}")
-
-
-def normalize_text(value: str) -> str:
-    return re.sub(r"\s+", " ", value).strip()
-
 
 def absolutize_url(href: str) -> str:
     if href.startswith("http://") or href.startswith("https://"):

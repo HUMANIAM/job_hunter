@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass
 from typing import Callable, Iterable
 
@@ -9,6 +8,8 @@ from playwright.sync_api import Page
 from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
+from shared.normalizer import normalize_text
+from sources.sioux.normalizer import normalize_job_tag_key
 
 
 @dataclass
@@ -23,14 +24,6 @@ class SiouxJob:
     workplace_type: str | None
     fulltime_parttime: str | None
     description_text: str
-
-
-def normalize_text(value: str) -> str:
-    return re.sub(r"\s+", " ", value).strip()
-
-
-def normalize_job_tag_key(value: str) -> str:
-    return normalize_text(value).lower()
 
 
 def _log(log_message: Callable[[str], None] | None, message: str) -> None:
