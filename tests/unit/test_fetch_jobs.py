@@ -1,6 +1,5 @@
-import json
-
 import fetch_jobs
+from sources.sioux import parser as sioux_parser
 
 
 def test_matched_keywords_uses_boundaries_for_short_keywords() -> None:
@@ -22,7 +21,7 @@ def test_matched_keywords_uses_boundaries_for_short_keywords() -> None:
 
 def test_evaluate_job_skips_only_by_title() -> None:
     # Given: a software title with non-target business words in the description
-    job = fetch_jobs.Job(
+    job = sioux_parser.SiouxJob(
         title="Controls Scientist",
         url="https://example.com/controls-scientist",
         disciplines=[],
@@ -49,7 +48,7 @@ def test_evaluate_job_skips_only_by_title() -> None:
 
 def test_evaluate_job_rejects_skip_title_keyword() -> None:
     # Given: a title that is clearly outside the target profile
-    job = fetch_jobs.Job(
+    job = sioux_parser.SiouxJob(
         title="Supply Chain Planner",
         url="https://example.com/supply-chain-planner",
         disciplines=[],
@@ -73,7 +72,7 @@ def test_evaluate_job_rejects_skip_title_keyword() -> None:
 
 def test_evaluate_job_rejects_low_signal_description_only_match() -> None:
     # Given: a non-target title with only a generic description keyword
-    job = fetch_jobs.Job(
+    job = sioux_parser.SiouxJob(
         title="Accounts Payable Specialist",
         url="https://example.com/accounts-payable-specialist",
         disciplines=[],
@@ -97,7 +96,7 @@ def test_evaluate_job_rejects_low_signal_description_only_match() -> None:
 
 def test_evaluate_job_keeps_strong_description_only_match() -> None:
     # Given: an ambiguous title with multiple strong technical description hits
-    job = fetch_jobs.Job(
+    job = sioux_parser.SiouxJob(
         title="Process Improvement Role",
         url="https://example.com/process-improvement-role",
         disciplines=[],
@@ -125,65 +124,3 @@ def test_evaluate_job_keeps_strong_description_only_match() -> None:
         "machine learning",
         "inference",
     ]
-
-
-def test_parse_job_posting_json_ld_blocks_extracts_location_country() -> None:
-    # Given: a JobPosting schema block with location metadata
-    json_ld_blocks = [
-        json.dumps(
-            {
-                "@context": "https://schema.org/",
-                "@type": "JobPosting",
-                "jobLocation": {
-                    "address": {
-                        "addressLocality": "Eindhoven",
-                        "addressCountry": "NL",
-                    }
-                },
-                "employmentType": "Full time",
-            }
-        )
-    ]
-
-    # When: the structured metadata is parsed
-    metadata = fetch_jobs.parse_job_posting_json_ld_blocks(json_ld_blocks)
-
-    # Then: the structured location fields should be available
-    assert metadata == {
-        "location": "Eindhoven",
-        "country": "NL",
-        "employment_type": "Full time",
-    }
-
-
-def test_resolve_job_metadata_prefers_job_tags(monkeypatch) -> None:
-    # Given: job-tag metadata and a schema fallback with overlapping fields
-    monkeypatch.setattr(
-        fetch_jobs,
-        "extract_job_tags",
-        lambda _page: {
-            "location": "Eindhoven",
-            "employment": "Full time",
-            "education level": "Bachelor",
-        },
-    )
-    monkeypatch.setattr(
-        fetch_jobs,
-        "extract_job_posting_metadata",
-        lambda _page: {
-            "location": "Fallback City",
-            "country": "NL",
-            "employment_type": "Fallback employment",
-        },
-    )
-
-    # When: the metadata is resolved for a vacancy page
-    metadata = fetch_jobs.resolve_job_metadata(object())
-
-    # Then: explicit job tags should win, with schema data kept as fallback
-    assert metadata == {
-        "location": "Eindhoven",
-        "country": "NL",
-        "educational_background": "Bachelor",
-        "fulltime_parttime": "Full time",
-    }
