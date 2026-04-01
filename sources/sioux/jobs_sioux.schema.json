@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sources/sioux/jobs_sioux.schema.json",
+  "title": "Sioux Kept Jobs Payload",
+  "description": "Schema for the final kept-jobs artifact written to jobs_sioux.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fetched_at_unix",
+    "source",
+    "configured_countries",
+    "configured_languages",
+    "total_jobs",
+    "relevant_jobs",
+    "jobs"
+  ],
+  "properties": {
+    "fetched_at_unix": {
+      "type": "integer"
+    },
+    "source": {
+      "type": "string"
+    },
+    "configured_countries": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "configured_languages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "total_jobs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "relevant_jobs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "jobs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/siouxJob"
+      }
+    }
+  },
+  "$defs": {
+    "nullableString": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "nullableInteger": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "nullableBoolean": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "siouxJob": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "url",
+        "disciplines",
+        "location",
+        "team",
+        "work_experience",
+        "min_years_experience",
+        "max_years_experience",
+        "experience_text",
+        "educational_background",
+        "required_degrees",
+        "required_languages",
+        "preferred_languages",
+        "industry_domains",
+        "workplace_type",
+        "fulltime_parttime",
+        "min_hours_per_week",
+        "max_hours_per_week",
+        "remote_policy",
+        "work_locations_text",
+        "client_site_required",
+        "travel_region",
+        "recruiter_name",
+        "recruiter_role",
+        "recruiter_email",
+        "recruiter_phone",
+        "required_skills",
+        "preferred_skills",
+        "description_text"
+      ],
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "disciplines": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "location": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "team": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "work_experience": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "min_years_experience": {
+          "$ref": "#/$defs/nullableInteger"
+        },
+        "max_years_experience": {
+          "$ref": "#/$defs/nullableInteger"
+        },
+        "experience_text": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "educational_background": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "required_degrees": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "required_languages": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "preferred_languages": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "industry_domains": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "workplace_type": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "fulltime_parttime": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "min_hours_per_week": {
+          "$ref": "#/$defs/nullableInteger"
+        },
+        "max_hours_per_week": {
+          "$ref": "#/$defs/nullableInteger"
+        },
+        "remote_policy": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "work_locations_text": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "client_site_required": {
+          "$ref": "#/$defs/nullableBoolean"
+        },
+        "travel_region": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "recruiter_name": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "recruiter_role": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "recruiter_email": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "recruiter_phone": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "required_skills": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "preferred_skills": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "description_text": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

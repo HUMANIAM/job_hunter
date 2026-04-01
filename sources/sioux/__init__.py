@@ -4,7 +4,7 @@ from typing import Any, Callable
 
 from sources.base import SourceDefinition, SourceRetrievalResult
 from sources.sioux import adapter as sioux_adapter
-from sources.sioux import parser as sioux_parser
+from sources.sioux import parser_back as sioux_parser
 
 
 class SiouxSourceAdapter:
