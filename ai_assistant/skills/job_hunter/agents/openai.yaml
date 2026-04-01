@@ -1,0 +1,4 @@
+interface:
+  display_name: "Job Hunter"
+  short_description: "Guides scraper, validation, and evaluation work"
+  default_prompt: "Use $job_hunter to work on the job_hunter scraper, debug vacancy collection or extraction, or review validation and evaluation logic."

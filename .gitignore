@@ -1,5 +1,6 @@
 # Local environment
 .venv/
+.codex
 
 # Python cache
 __pycache__/
@@ -8,6 +9,7 @@ __pycache__/
 # Packaging and build output
 build/
 *.egg-info/
+*.zip
 
 # Generated scraper artifacts
 vacancies/
