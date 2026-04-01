@@ -1,16 +1,25 @@
-import fetch_jobs
-from sources.sioux import parser as sioux_parser
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from ranking import evaluator as ranking_evaluator
+
+
+@dataclass
+class FakeJob:
+    title: str | None
+    description_text: str | None
 
 
 def test_matched_keywords_uses_boundaries_for_short_keywords() -> None:
     # Given: a short keyword that previously matched inside a larger token
-    patterns = fetch_jobs.compile_keyword_patterns(["ml"])
+    patterns = ranking_evaluator.compile_keyword_patterns(["ml"])
 
     # When: the helper scans unrelated text
-    matched_in_asml = fetch_jobs.matched_keywords(
+    matched_in_asml = ranking_evaluator.matched_keywords(
         "ASML careers portal", ["ml"], patterns
     )
-    matched_in_ml_text = fetch_jobs.matched_keywords(
+    matched_in_ml_text = ranking_evaluator.matched_keywords(
         "Experience with ML inference systems.", ["ml"], patterns
     )
 
@@ -21,16 +30,8 @@ def test_matched_keywords_uses_boundaries_for_short_keywords() -> None:
 
 def test_evaluate_job_skips_only_by_title() -> None:
     # Given: a software title with non-target business words in the description
-    job = sioux_parser.SiouxJob(
+    job = FakeJob(
         title="Controls Scientist",
-        url="https://example.com/controls-scientist",
-        disciplines=[],
-        location=None,
-        team=None,
-        work_experience=None,
-        educational_background=None,
-        workplace_type=None,
-        fulltime_parttime=None,
         description_text=(
             "Build machine control software for lithography systems and "
             "partner with finance and supply chain stakeholders."
@@ -38,7 +39,7 @@ def test_evaluate_job_skips_only_by_title() -> None:
     )
 
     # When: the job is evaluated
-    evaluation = fetch_jobs.evaluate_job(job)
+    evaluation = ranking_evaluator.evaluate_job(job)
 
     # Then: the description should not trigger a hard reject
     assert evaluation["decision"] == "keep"
@@ -48,21 +49,13 @@ def test_evaluate_job_skips_only_by_title() -> None:
 
 def test_evaluate_job_rejects_skip_title_keyword() -> None:
     # Given: a title that is clearly outside the target profile
-    job = sioux_parser.SiouxJob(
+    job = FakeJob(
         title="Supply Chain Planner",
-        url="https://example.com/supply-chain-planner",
-        disciplines=[],
-        location=None,
-        team=None,
-        work_experience=None,
-        educational_background=None,
-        workplace_type=None,
-        fulltime_parttime=None,
         description_text="Python dashboards and automation for operations.",
     )
 
     # When: the job is evaluated
-    evaluation = fetch_jobs.evaluate_job(job)
+    evaluation = ranking_evaluator.evaluate_job(job)
 
     # Then: the skip title keyword should override keep terms
     assert evaluation["decision"] == "skip"
@@ -72,21 +65,13 @@ def test_evaluate_job_rejects_skip_title_keyword() -> None:
 
 def test_evaluate_job_rejects_low_signal_description_only_match() -> None:
     # Given: a non-target title with only a generic description keyword
-    job = sioux_parser.SiouxJob(
+    job = FakeJob(
         title="Accounts Payable Specialist",
-        url="https://example.com/accounts-payable-specialist",
-        disciplines=[],
-        location=None,
-        team=None,
-        work_experience=None,
-        educational_background=None,
-        workplace_type=None,
-        fulltime_parttime=None,
         description_text="The team is focused on control processes and approvals.",
     )
 
     # When: the job is evaluated
-    evaluation = fetch_jobs.evaluate_job(job)
+    evaluation = ranking_evaluator.evaluate_job(job)
 
     # Then: a single low-signal description hit should not keep the job
     assert evaluation["decision"] == "skip"
@@ -96,16 +81,8 @@ def test_evaluate_job_rejects_low_signal_description_only_match() -> None:
 
 def test_evaluate_job_keeps_strong_description_only_match() -> None:
     # Given: an ambiguous title with multiple strong technical description hits
-    job = sioux_parser.SiouxJob(
+    job = FakeJob(
         title="Process Improvement Role",
-        url="https://example.com/process-improvement-role",
-        disciplines=[],
-        location=None,
-        team=None,
-        work_experience=None,
-        educational_background=None,
-        workplace_type=None,
-        fulltime_parttime=None,
         description_text=(
             "Build Python tooling for Linux-based systems and machine learning "
             "inference workflows."
@@ -113,7 +90,7 @@ def test_evaluate_job_keeps_strong_description_only_match() -> None:
     )
 
     # When: the job is evaluated
-    evaluation = fetch_jobs.evaluate_job(job)
+    evaluation = ranking_evaluator.evaluate_job(job)
 
     # Then: multiple strong description hits should keep the job
     assert evaluation["decision"] == "keep"
