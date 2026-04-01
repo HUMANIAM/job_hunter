@@ -8,6 +8,8 @@ version = "0.1.0"
 description = "Standalone job-hunter scraper for collecting and evaluating consultancy client vacancies."
 requires-python = ">=3.8"
 dependencies = [
+    "openai==1.109.1",
+    "pydantic>=2.10,<3",
     "playwright==1.48.0",
 ]
 
@@ -21,3 +23,6 @@ fetch-jobs = "fetch_jobs:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "openai_integration: exercises the live OpenAI-backed Sioux extractor",
+]

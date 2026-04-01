@@ -73,6 +73,237 @@
         "type": "string"
       }
     },
+    "seniorityHint": {
+      "enum": [
+        "junior",
+        "medior",
+        "senior",
+        "lead",
+        "principal",
+        "staff",
+        null
+      ]
+    },
+    "llmExtraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required_skills",
+        "preferred_skills",
+        "required_languages",
+        "preferred_languages",
+        "required_protocols",
+        "preferred_protocols",
+        "required_standards",
+        "preferred_standards",
+        "required_domains",
+        "preferred_domains",
+        "seniority_hint",
+        "restrictions",
+        "evidence"
+      ],
+      "properties": {
+        "required_skills": {
+          "$ref": "#/$defs/siouxJob/properties/required_skills"
+        },
+        "preferred_skills": {
+          "$ref": "#/$defs/siouxJob/properties/preferred_skills"
+        },
+        "required_languages": {
+          "$ref": "#/$defs/siouxJob/properties/required_languages"
+        },
+        "preferred_languages": {
+          "$ref": "#/$defs/siouxJob/properties/preferred_languages"
+        },
+        "required_protocols": {
+          "$ref": "#/$defs/siouxJob/properties/required_protocols"
+        },
+        "preferred_protocols": {
+          "$ref": "#/$defs/siouxJob/properties/preferred_protocols"
+        },
+        "required_standards": {
+          "$ref": "#/$defs/siouxJob/properties/required_standards"
+        },
+        "preferred_standards": {
+          "$ref": "#/$defs/siouxJob/properties/preferred_standards"
+        },
+        "required_domains": {
+          "$ref": "#/$defs/siouxJob/properties/required_domains"
+        },
+        "preferred_domains": {
+          "$ref": "#/$defs/siouxJob/properties/preferred_domains"
+        },
+        "seniority_hint": {
+          "$ref": "#/$defs/seniorityHint"
+        },
+        "restrictions": {
+          "$ref": "#/$defs/siouxJob/properties/restrictions"
+        },
+        "evidence": {
+          "$ref": "#/$defs/llmEvidence"
+        }
+      }
+    },
+    "siouxJobDeterministicContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "url",
+        "disciplines",
+        "location",
+        "team",
+        "work_experience",
+        "min_years_experience",
+        "max_years_experience",
+        "experience_text",
+        "educational_background",
+        "required_degrees",
+        "industry_domains",
+        "workplace_type",
+        "fulltime_parttime",
+        "min_hours_per_week",
+        "max_hours_per_week",
+        "remote_policy",
+        "work_locations_text",
+        "client_site_required",
+        "travel_region",
+        "recruiter_name",
+        "recruiter_role",
+        "recruiter_email",
+        "recruiter_phone"
+      ],
+      "properties": {
+        "title": {
+          "$ref": "#/$defs/siouxJob/properties/title"
+        },
+        "url": {
+          "$ref": "#/$defs/siouxJob/properties/url"
+        },
+        "disciplines": {
+          "$ref": "#/$defs/siouxJob/properties/disciplines"
+        },
+        "location": {
+          "$ref": "#/$defs/siouxJob/properties/location"
+        },
+        "team": {
+          "$ref": "#/$defs/siouxJob/properties/team"
+        },
+        "work_experience": {
+          "$ref": "#/$defs/siouxJob/properties/work_experience"
+        },
+        "min_years_experience": {
+          "$ref": "#/$defs/siouxJob/properties/min_years_experience"
+        },
+        "max_years_experience": {
+          "$ref": "#/$defs/siouxJob/properties/max_years_experience"
+        },
+        "experience_text": {
+          "$ref": "#/$defs/siouxJob/properties/experience_text"
+        },
+        "educational_background": {
+          "$ref": "#/$defs/siouxJob/properties/educational_background"
+        },
+        "required_degrees": {
+          "$ref": "#/$defs/siouxJob/properties/required_degrees"
+        },
+        "industry_domains": {
+          "$ref": "#/$defs/siouxJob/properties/industry_domains"
+        },
+        "workplace_type": {
+          "$ref": "#/$defs/siouxJob/properties/workplace_type"
+        },
+        "fulltime_parttime": {
+          "$ref": "#/$defs/siouxJob/properties/fulltime_parttime"
+        },
+        "min_hours_per_week": {
+          "$ref": "#/$defs/siouxJob/properties/min_hours_per_week"
+        },
+        "max_hours_per_week": {
+          "$ref": "#/$defs/siouxJob/properties/max_hours_per_week"
+        },
+        "remote_policy": {
+          "$ref": "#/$defs/siouxJob/properties/remote_policy"
+        },
+        "work_locations_text": {
+          "$ref": "#/$defs/siouxJob/properties/work_locations_text"
+        },
+        "client_site_required": {
+          "$ref": "#/$defs/siouxJob/properties/client_site_required"
+        },
+        "travel_region": {
+          "$ref": "#/$defs/siouxJob/properties/travel_region"
+        },
+        "recruiter_name": {
+          "$ref": "#/$defs/siouxJob/properties/recruiter_name"
+        },
+        "recruiter_role": {
+          "$ref": "#/$defs/siouxJob/properties/recruiter_role"
+        },
+        "recruiter_email": {
+          "$ref": "#/$defs/siouxJob/properties/recruiter_email"
+        },
+        "recruiter_phone": {
+          "$ref": "#/$defs/siouxJob/properties/recruiter_phone"
+        }
+      }
+    },
+    "llmEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required_skills",
+        "preferred_skills",
+        "required_languages",
+        "preferred_languages",
+        "required_protocols",
+        "preferred_protocols",
+        "required_standards",
+        "preferred_standards",
+        "required_domains",
+        "preferred_domains",
+        "seniority_hint",
+        "restrictions"
+      ],
+      "properties": {
+        "required_skills": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "preferred_skills": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "required_languages": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "preferred_languages": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "required_protocols": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "preferred_protocols": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "required_standards": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "preferred_standards": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "required_domains": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "preferred_domains": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "seniority_hint": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "restrictions": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
     "siouxJob": {
       "type": "object",
       "additionalProperties": false,
@@ -90,7 +321,13 @@
         "required_degrees",
         "required_languages",
         "preferred_languages",
+        "required_protocols",
+        "preferred_protocols",
+        "required_standards",
+        "preferred_standards",
         "industry_domains",
+        "required_domains",
+        "preferred_domains",
         "workplace_type",
         "fulltime_parttime",
         "min_hours_per_week",
@@ -105,6 +342,9 @@
         "recruiter_phone",
         "required_skills",
         "preferred_skills",
+        "seniority_hint",
+        "restrictions",
+        "evidence",
         "description_text"
       ],
       "properties": {
@@ -147,7 +387,25 @@
         "preferred_languages": {
           "$ref": "#/$defs/stringArray"
         },
+        "required_protocols": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "preferred_protocols": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "required_standards": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "preferred_standards": {
+          "$ref": "#/$defs/stringArray"
+        },
         "industry_domains": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "required_domains": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "preferred_domains": {
           "$ref": "#/$defs/stringArray"
         },
         "workplace_type": {
@@ -191,6 +449,15 @@
         },
         "preferred_skills": {
           "$ref": "#/$defs/stringArray"
+        },
+        "seniority_hint": {
+          "$ref": "#/$defs/seniorityHint"
+        },
+        "restrictions": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "evidence": {
+          "$ref": "#/$defs/llmEvidence"
         },
         "description_text": {
           "type": "string"

@@ -1,3 +1,57 @@
+# Deterministic Parser Spec and Reference Code
+
+This parser intentionally handles **only confident deterministic fields**.
+It does **not** try to classify required vs preferred skills.
+That ambiguity is delegated to the LLM.
+
+Use this parser before the LLM step.
+
+## Deterministic Scope
+
+Keep in parser:
+- title
+- url
+- disciplines
+- location
+- team
+- work_experience
+- min_years_experience
+- max_years_experience
+- experience_text
+- educational_background
+- required_degrees
+- industry_domains
+- workplace_type
+- fulltime_parttime
+- min_hours_per_week
+- max_hours_per_week
+- remote_policy
+- work_locations_text
+- client_site_required
+- travel_region
+- recruiter_name
+- recruiter_role
+- recruiter_email
+- recruiter_phone
+- description_text
+
+Move out of parser and into LLM:
+- required_skills
+- preferred_skills
+- required_languages
+- preferred_languages
+- required_protocols
+- preferred_protocols
+- required_standards
+- preferred_standards
+- required_domains
+- preferred_domains
+- restrictions
+- seniority_hint
+
+## Reference Code
+
+```python
 from __future__ import annotations
 
 import json
@@ -9,12 +63,6 @@ from playwright.sync_api import Page
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from shared.normalizer import normalize_text
-from sources.sioux.llm import (
-    SiouxLlmEvidencePayload,
-    SiouxLlmExtractionPayload,
-    SiouxLlmExtractor,
-    get_default_llm_extractor,
-)
 from sources.sioux.normalizer import normalize_job_tag_key
 
 
@@ -44,64 +92,6 @@ class SiouxJobDeterministic:
     recruiter_role: str | None
     recruiter_email: str | None
     recruiter_phone: str | None
-    description_text: str
-
-
-@dataclass
-class SiouxJobLlmEvidence:
-    required_skills: list[str]
-    preferred_skills: list[str]
-    required_languages: list[str]
-    preferred_languages: list[str]
-    required_protocols: list[str]
-    preferred_protocols: list[str]
-    required_standards: list[str]
-    preferred_standards: list[str]
-    required_domains: list[str]
-    preferred_domains: list[str]
-    seniority_hint: list[str]
-    restrictions: list[str]
-
-
-@dataclass
-class SiouxJob:
-    title: str
-    url: str
-    disciplines: list[str]
-    location: str | None
-    team: str | None
-    work_experience: str | None
-    min_years_experience: int | None
-    max_years_experience: int | None
-    experience_text: str | None
-    educational_background: str | None
-    required_degrees: list[str]
-    required_languages: list[str]
-    preferred_languages: list[str]
-    required_protocols: list[str]
-    preferred_protocols: list[str]
-    required_standards: list[str]
-    preferred_standards: list[str]
-    industry_domains: list[str]
-    required_domains: list[str]
-    preferred_domains: list[str]
-    workplace_type: str | None
-    fulltime_parttime: str | None
-    min_hours_per_week: int | None
-    max_hours_per_week: int | None
-    remote_policy: str | None
-    work_locations_text: str | None
-    client_site_required: bool | None
-    travel_region: str | None
-    recruiter_name: str | None
-    recruiter_role: str | None
-    recruiter_email: str | None
-    recruiter_phone: str | None
-    required_skills: list[str]
-    preferred_skills: list[str]
-    seniority_hint: str | None
-    restrictions: list[str]
-    evidence: SiouxJobLlmEvidence
     description_text: str
 
 
@@ -635,98 +625,13 @@ def fetch_job_deterministic(
         recruiter_phone=recruiter_phone,
         description_text=description_text,
     )
+```
 
+## Integration Note
 
-def _build_llm_evidence(
-    evidence: SiouxLlmEvidencePayload,
-) -> SiouxJobLlmEvidence:
-    return SiouxJobLlmEvidence(**evidence.model_dump())
+Then your pipeline becomes:
 
-
-def _build_job(
-    deterministic_job: SiouxJobDeterministic,
-    llm_payload: SiouxLlmExtractionPayload,
-) -> SiouxJob:
-    return SiouxJob(
-        title=deterministic_job.title,
-        url=deterministic_job.url,
-        disciplines=deterministic_job.disciplines,
-        location=deterministic_job.location,
-        team=deterministic_job.team,
-        work_experience=deterministic_job.work_experience,
-        min_years_experience=deterministic_job.min_years_experience,
-        max_years_experience=deterministic_job.max_years_experience,
-        experience_text=deterministic_job.experience_text,
-        educational_background=deterministic_job.educational_background,
-        required_degrees=deterministic_job.required_degrees,
-        required_languages=llm_payload.required_languages,
-        preferred_languages=llm_payload.preferred_languages,
-        required_protocols=llm_payload.required_protocols,
-        preferred_protocols=llm_payload.preferred_protocols,
-        required_standards=llm_payload.required_standards,
-        preferred_standards=llm_payload.preferred_standards,
-        industry_domains=deterministic_job.industry_domains,
-        required_domains=llm_payload.required_domains,
-        preferred_domains=llm_payload.preferred_domains,
-        workplace_type=deterministic_job.workplace_type,
-        fulltime_parttime=deterministic_job.fulltime_parttime,
-        min_hours_per_week=deterministic_job.min_hours_per_week,
-        max_hours_per_week=deterministic_job.max_hours_per_week,
-        remote_policy=deterministic_job.remote_policy,
-        work_locations_text=deterministic_job.work_locations_text,
-        client_site_required=deterministic_job.client_site_required,
-        travel_region=deterministic_job.travel_region,
-        recruiter_name=deterministic_job.recruiter_name,
-        recruiter_role=deterministic_job.recruiter_role,
-        recruiter_email=deterministic_job.recruiter_email,
-        recruiter_phone=deterministic_job.recruiter_phone,
-        required_skills=llm_payload.required_skills,
-        preferred_skills=llm_payload.preferred_skills,
-        seniority_hint=llm_payload.seniority_hint,
-        restrictions=llm_payload.restrictions,
-        evidence=_build_llm_evidence(llm_payload.evidence),
-        description_text=deterministic_job.description_text,
-    )
-
-
-def fetch_job(
-    page: Page,
-    url: str,
-    disciplines: list[str] | None = None,
-    log_message: Callable[[str], None] | None = None,
-    llm_extractor: SiouxLlmExtractor | None = None,
-) -> SiouxJob | None:
-    deterministic_job = fetch_job_deterministic(
-        page,
-        url,
-        disciplines=disciplines,
-        log_message=log_message,
-    )
-    if deterministic_job is None:
-        return None
-
-    extractor = llm_extractor or get_default_llm_extractor()
-    llm_payload = extractor.extract(deterministic_job)
-    job = _build_job(deterministic_job, llm_payload)
-
-    _log(
-        log_message,
-        "extracted job: "
-        f"title='{job.title}', "
-        f"disciplines={job.disciplines}, "
-        f"location='{job.location}', "
-        f"employment='{job.fulltime_parttime}', "
-        f"experience='{job.experience_text}', "
-        f"experience_range=({job.min_years_experience}, {job.max_years_experience}), "
-        f"required_languages={job.required_languages}, "
-        f"preferred_languages={job.preferred_languages}, "
-        f"required_protocols={job.required_protocols}, "
-        f"required_standards={job.required_standards}, "
-        f"required_domains={job.required_domains}, "
-        f"seniority_hint='{job.seniority_hint}', "
-        f"restrictions={job.restrictions}, "
-        f"required_skills={len(job.required_skills)}, "
-        f"preferred_skills={len(job.preferred_skills)}, "
-        f"description_len={len(job.description_text)}",
-    )
-    return job
+1. deterministic parser extracts confident fields
+2. LLM extracts ambiguous semantic fields
+3. merge both into final job object
+4. rank deterministically on structured fields
