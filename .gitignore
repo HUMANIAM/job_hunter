@@ -12,4 +12,4 @@ build/
 *.zip
 
 # Generated scraper artifacts
-vacancies/
+data/analysis/sioux/

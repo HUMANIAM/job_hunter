@@ -45,7 +45,7 @@ from playwright.sync_api import (
 START_URL = "https://vacancy.sioux.eu/"
 BASE_URL = "https://vacancy.sioux.eu"
 
-OUTPUT_DIR = Path("vacancies/sioux")
+OUTPUT_DIR = Path("data/analysis/sioux")
 RAW_OUTPUT_PATH = OUTPUT_DIR / "jobs_sioux_raw.json"
 EVALUATED_OUTPUT_PATH = OUTPUT_DIR / "jobs_sioux_evaluated.json"
 OUTPUT_PATH = OUTPUT_DIR / "jobs_sioux.json"

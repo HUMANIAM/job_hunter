@@ -38,6 +38,6 @@ Run the scraper:
 
 ## Repository Policy
 
-Generated vacancy outputs under `vacancies/` are local artifacts and are not tracked as source files.
+Generated vacancy outputs under `data/analysis/sioux/` are local artifacts and are not tracked as source files.
 
 The repository should track source code, tests, and project metadata, while keeping local environment state and generated data out of version control.

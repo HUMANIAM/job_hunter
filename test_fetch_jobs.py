@@ -131,10 +131,30 @@ class FilterRelevantJobsTests(unittest.TestCase):
 
 
 class WriteJsonTests(unittest.TestCase):
+    def test_sioux_output_paths_use_analysis_directory(self) -> None:
+        # Given: the scraper's configured output location
+        expected_dir = Path("data/analysis/sioux")
+
+        # Then: all Sioux artifact paths should resolve under the analysis folder
+        self.assertEqual(fetch_jobs.OUTPUT_DIR, expected_dir)
+        self.assertEqual(
+            fetch_jobs.RAW_OUTPUT_PATH,
+            expected_dir / "jobs_sioux_raw.json",
+        )
+        self.assertEqual(
+            fetch_jobs.EVALUATED_OUTPUT_PATH,
+            expected_dir / "jobs_sioux_evaluated.json",
+        )
+        self.assertEqual(fetch_jobs.OUTPUT_PATH, expected_dir / "jobs_sioux.json")
+        self.assertEqual(
+            fetch_jobs.VALIDATION_OUTPUT_PATH,
+            expected_dir / "jobs_sioux_validation.json",
+        )
+
     def test_write_json_creates_parent_directories(self) -> None:
         # Given: a nested output path that does not exist yet
         with tempfile.TemporaryDirectory() as tmp_dir:
-            output_path = Path(tmp_dir) / "vacancies" / "sioux" / "sample.json"
+            output_path = Path(tmp_dir) / "data" / "analysis" / "sioux" / "sample.json"
 
             # When: the helper writes a payload
             fetch_jobs.write_json(output_path, {"ok": True})
