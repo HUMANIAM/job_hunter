@@ -32,7 +32,7 @@ from dataclasses import asdict
 from playwright.sync_api import sync_playwright
 from infra.browser import launched_chromium
 from infra.logging import log
-from ranking.evaluator import evaluate_job
+from ranking.service import evaluate_jobs
 from reporting import writer as report_writer
 from sources.sioux import adapter as sioux_adapter
 from sources.sioux import parser as sioux_parser
@@ -83,38 +83,10 @@ def main() -> None:
     )
 
     log("starting evaluation")
-    evaluated_jobs: list[dict] = []
-    relevant_jobs: list[sioux_parser.SiouxJob] = []
-
-    for idx, job in enumerate(jobs, start=1):
-        evaluation = evaluate_job(job)
-
-        if evaluation["decision"] == "keep":
-            log(
-                f"KEEP [{idx}] '{job.title}' | "
-                f"reason={evaluation['reason']} | "
-                f"title_hits={evaluation['title_hits']} | "
-                f"description_hits={evaluation['description_hits']}"
-            )
-            relevant_jobs.append(job)
-        else:
-            log(
-                f"SKIP [{idx}] '{job.title}' | "
-                f"reason={evaluation['reason']} | "
-                f"skip_hits={evaluation['skip_hits']} | "
-                f"description_hits={evaluation['description_hits']}"
-            )
-
-        job_dict = asdict(job)
-        job_dict["decision"] = evaluation["decision"]
-        job_dict["reason"] = evaluation["reason"]
-        job_dict["skip_hits"] = evaluation["skip_hits"]
-        job_dict["title_hits"] = evaluation["title_hits"]
-        job_dict["description_hits"] = evaluation["description_hits"]
-        evaluated_jobs.append(job_dict)
+    ranking_result = evaluate_jobs(jobs, log_message=log)
 
     report_writer.write_evaluated_jobs(
-        jobs=evaluated_jobs,
+        jobs=ranking_result.evaluated_jobs,
         source=sioux_adapter.START_URL,
         configured_countries=sioux_adapter.TARGET_COUNTRIES,
         configured_languages=sioux_adapter.TARGET_LANGUAGES,
@@ -122,7 +94,7 @@ def main() -> None:
     )
 
     report_writer.write_kept_jobs(
-        jobs=[asdict(job) for job in relevant_jobs],
+        jobs=[asdict(job) for job in ranking_result.kept_jobs],
         total_jobs=len(jobs),
         source=sioux_adapter.START_URL,
         configured_countries=sioux_adapter.TARGET_COUNTRIES,
@@ -133,7 +105,7 @@ def main() -> None:
     elapsed = time.time() - started_at
     log(
         f"done: total_jobs={len(jobs)} | "
-        f"relevant_jobs={len(relevant_jobs)} | "
+        f"relevant_jobs={len(ranking_result.kept_jobs)} | "
         f"elapsed_seconds={elapsed:.2f}"
     )
 
