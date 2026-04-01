@@ -30,32 +30,17 @@ import json
 import re
 import time
 from dataclasses import asdict, dataclass
-from pathlib import Path
 from typing import Iterable
 
 from playwright.sync_api import (
-    Browser,
     Page,
     sync_playwright,
 )
 from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
-
-START_URL = "https://vacancy.sioux.eu/"
-BASE_URL = "https://vacancy.sioux.eu"
-
-OUTPUT_DIR = Path("data/analysis/sioux")
-RAW_OUTPUT_PATH = OUTPUT_DIR / "jobs_sioux_raw.json"
-EVALUATED_OUTPUT_PATH = OUTPUT_DIR / "jobs_sioux_evaluated.json"
-OUTPUT_PATH = OUTPUT_DIR / "jobs_sioux.json"
-VALIDATION_OUTPUT_PATH = OUTPUT_DIR / "jobs_sioux_validation.json"
-
-# Reserved for future parsing-based filtering once structured fields are reliable.
-TARGET_COUNTRIES: tuple[str, ...] = ()
-TARGET_LANGUAGES: tuple[str, ...] = ()
-
-JOB_URL_RE = re.compile(r"^https://vacancy\.sioux\.eu/vacancies/.+\.html$")
+from reporting import writer as report_writer
+from sources.sioux import adapter as sioux_adapter
 
 SKIP_TITLE_KEYWORDS = [
     "intern",
@@ -177,14 +162,6 @@ def normalize_text(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
-def absolutize_url(href: str) -> str:
-    if href.startswith("http://") or href.startswith("https://"):
-        return href
-    if href.startswith("/"):
-        return BASE_URL + href
-    return BASE_URL + "/" + href.lstrip("/")
-
-
 def compile_keyword_patterns(keywords: Iterable[str]) -> tuple[re.Pattern[str], ...]:
     patterns: list[re.Pattern[str]] = []
     for keyword in keywords:
@@ -208,306 +185,6 @@ def matched_keywords(
         for keyword, pattern in zip(keywords, patterns)
         if pattern.search(normalized_text)
     ]
-
-
-def wait_for_results(page: Page) -> None:
-    page.wait_for_load_state("domcontentloaded")
-    page.wait_for_timeout(1200)
-    try:
-        page.locator("a.act-item-job-overview").first.wait_for(timeout=5000)
-    except Exception:
-        pass
-
-
-def close_cookie_banner_if_present(page: Page) -> None:
-    try:
-        btn = page.locator("input.cookieClose.cookieAccept").first
-        if btn.count() > 0 and btn.is_visible():
-            btn.click(timeout=2000)
-            page.wait_for_timeout(500)
-            log("accepted cookie banner")
-    except Exception:
-        pass
-
-
-def extract_discipline_facets(page: Page) -> list[tuple[str, str, int]]:
-    facets: list[tuple[str, str, int]] = []
-
-    links = page.locator("div.facets_item[data-type='functiegr'] a.filter-item-link")
-    count = links.count()
-    log(f"found {count} discipline facet links")
-
-    for i in range(count):
-        link = links.nth(i)
-        name = normalize_text(link.locator(".filter-item-link-name").inner_text())
-        count_text = normalize_text(link.locator(".filter-item-link-count").inner_text())
-        href = link.get_attribute("href")
-        if not href:
-            continue
-
-        expected_count = int(count_text) if count_text.isdigit() else -1
-        full_url = absolutize_url(href)
-        facets.append((name, full_url, expected_count))
-        log(f"facet: name='{name}' expected={expected_count} url={full_url}")
-
-    return facets
-
-
-def collect_job_links_from_page(page: Page, context: str) -> set[str]:
-    hrefs: set[str] = set()
-
-    cards = page.locator("a.act-item-job-overview")
-    count = cards.count()
-    log(f"{context}: found {count} vacancy cards")
-
-    for i in range(count):
-        href = cards.nth(i).get_attribute("href")
-        if not href:
-            continue
-        href = absolutize_url(href)
-        if JOB_URL_RE.match(href):
-            hrefs.add(href)
-
-    log(f"{context}: collected {len(hrefs)} vacancy links from current page")
-    return hrefs
-
-
-def collect_links_from_paginated_listing(
-    page: Page,
-    context: str,
-    expected_count: int | None = None,
-) -> set[str]:
-    collected_links: set[str] = set()
-    visited_pages: set[str] = set()
-    page_index = 1
-
-    while True:
-        current_url = page.url
-        if current_url in visited_pages:
-            log(f"{context}: detected repeated page url, stopping")
-            break
-
-        visited_pages.add(current_url)
-
-        page_links = collect_job_links_from_page(page, f"{context} page {page_index}")
-        before = len(collected_links)
-        collected_links.update(page_links)
-        after = len(collected_links)
-
-        log(
-            f"{context} page {page_index}: "
-            f"added {after - before} new links | cumulative={after}"
-        )
-
-        if expected_count is not None and expected_count > 0 and after >= expected_count:
-            log(f"{context}: reached expected count, stopping pagination")
-            break
-
-        next_url = get_next_page_url(page)
-        if not next_url:
-            log(f"{context}: no next page link")
-            break
-
-        if next_url in visited_pages:
-            log(f"{context}: next page url already visited, stopping")
-            break
-
-        log(f"{context}: following next page -> {next_url}")
-        page.goto(next_url, wait_until="domcontentloaded", timeout=30000)
-        wait_for_results(page)
-        page_index += 1
-
-    return collected_links
-
-
-def get_next_page_url(page: Page) -> str | None:
-    """
-    Read the actual Next link from paging controls.
-    """
-    try:
-        next_link = page.locator("div.overview-paging-controls a.paging-item-next").first
-        if next_link.count() == 0:
-            return None
-
-        href = next_link.get_attribute("href")
-        if not href:
-            return None
-
-        return absolutize_url(href)
-    except Exception:
-        return None
-
-
-def collect_links_for_facet(browser: Browser, facet_name: str, facet_url: str, expected_count: int) -> set[str]:
-    """
-    Visit one facet in a fresh context so facet state does not leak across requests.
-    Follow real paging links only when needed.
-    """
-    context = browser.new_context()
-    page = context.new_page()
-
-    try:
-        log(f"facet '{facet_name}': opening fresh session")
-        page.goto(START_URL, wait_until="domcontentloaded", timeout=30000)
-        wait_for_results(page)
-        close_cookie_banner_if_present(page)
-
-        log(f"facet '{facet_name}': opening facet url")
-        page.goto(facet_url, wait_until="domcontentloaded", timeout=30000)
-        wait_for_results(page)
-
-        facet_links = collect_links_from_paginated_listing(
-            page,
-            context=f"facet '{facet_name}'",
-            expected_count=expected_count,
-        )
-
-        log(
-            f"facet '{facet_name}': collected {len(facet_links)} unique links "
-            f"(sidebar expected count={expected_count})"
-        )
-
-        return facet_links
-
-    finally:
-        context.close()
-
-
-def collect_job_links_via_facets(
-    browser: Browser,
-) -> tuple[list[str], dict[str, list[str]]]:
-    """
-    Collect Sioux vacancy links by traversing each discipline facet in a fresh session.
-    Also return a mapping:
-        job_url -> sorted list of discipline names that reference that job
-    """
-    seed_context = browser.new_context()
-    seed_page = seed_context.new_page()
-
-    try:
-        log(f"opening entry page: {START_URL}")
-        seed_page.goto(START_URL, wait_until="domcontentloaded", timeout=30000)
-        wait_for_results(seed_page)
-        close_cookie_banner_if_present(seed_page)
-        log(f"current page url: {seed_page.url}")
-
-        facets = extract_discipline_facets(seed_page)
-    finally:
-        seed_context.close()
-
-    all_hrefs: set[str] = set()
-    url_to_disciplines: dict[str, set[str]] = {}
-
-    for facet_name, facet_url, expected_count in facets:
-        log(f"--- facet traversal: {facet_name} ---")
-        facet_links = collect_links_for_facet(browser, facet_name, facet_url, expected_count)
-
-        for url in facet_links:
-            all_hrefs.add(url)
-            url_to_disciplines.setdefault(url, set()).add(facet_name)
-
-        log(
-            f"facet '{facet_name}': merged into global set | "
-            f"facet_links={len(facet_links)} | cumulative={len(all_hrefs)}"
-        )
-
-    job_links = sorted(all_hrefs)
-    discipline_map = {
-        url: sorted(disciplines)
-        for url, disciplines in url_to_disciplines.items()
-    }
-
-    log(f"finished link collection: {len(job_links)} total unique vacancy links")
-    for idx, link in enumerate(job_links, start=1):
-        log(
-            f"link {idx}: {link} | disciplines={discipline_map.get(link, [])}"
-        )
-
-    return job_links, discipline_map
-
-
-def collect_job_links_via_unfiltered_pagination(browser: Browser) -> list[str]:
-    """
-    Collect Sioux vacancy links from the main overview without using facets.
-    """
-    context = browser.new_context()
-    page = context.new_page()
-
-    try:
-        log(f"unfiltered overview: opening entry page: {START_URL}")
-        page.goto(START_URL, wait_until="domcontentloaded", timeout=30000)
-        wait_for_results(page)
-        close_cookie_banner_if_present(page)
-        log(f"unfiltered overview: current page url: {page.url}")
-
-        unfiltered_links = collect_links_from_paginated_listing(
-            page,
-            context="unfiltered overview",
-        )
-        job_links = sorted(unfiltered_links)
-
-        log(
-            "unfiltered overview: finished link collection: "
-            f"{len(job_links)} total unique vacancy links"
-        )
-        for idx, link in enumerate(job_links, start=1):
-            log(f"unfiltered overview link {idx}: {link}")
-
-        return job_links
-    finally:
-        context.close()
-
-
-def build_collection_validation_report(
-    facet_union_urls: Iterable[str],
-    unfiltered_pagination_urls: Iterable[str],
-) -> dict:
-    facet_union_set = set(facet_union_urls)
-    unfiltered_pagination_set = set(unfiltered_pagination_urls)
-
-    only_in_facet_union = sorted(facet_union_set - unfiltered_pagination_set)
-    only_in_unfiltered_pagination = sorted(
-        unfiltered_pagination_set - facet_union_set
-    )
-
-    return {
-        "fetched_at_unix": int(time.time()),
-        "source": START_URL,
-        "configured_countries": list(TARGET_COUNTRIES),
-        "configured_languages": list(TARGET_LANGUAGES),
-        "facet_union_unique_count": len(facet_union_set),
-        "unfiltered_pagination_unique_count": len(unfiltered_pagination_set),
-        "facet_union_urls": sorted(facet_union_set),
-        "unfiltered_pagination_urls": sorted(unfiltered_pagination_set),
-        "only_in_facet_union_count": len(only_in_facet_union),
-        "only_in_facet_union": only_in_facet_union,
-        "only_in_unfiltered_pagination_count": len(only_in_unfiltered_pagination),
-        "only_in_unfiltered_pagination": only_in_unfiltered_pagination,
-        "sets_exactly_equal": facet_union_set == unfiltered_pagination_set,
-    }
-
-
-def log_collection_validation_report(report: dict) -> None:
-    log("collection validation report")
-    log(f"facet_union_unique_count={report['facet_union_unique_count']}")
-    log(
-        "unfiltered_pagination_unique_count="
-        f"{report['unfiltered_pagination_unique_count']}"
-    )
-    log(
-        f"only_in_facet_union_count={report['only_in_facet_union_count']}"
-    )
-    for url in report["only_in_facet_union"]:
-        log(f"only_in_facet_union: {url}")
-
-    log(
-        "only_in_unfiltered_pagination_count="
-        f"{report['only_in_unfiltered_pagination_count']}"
-    )
-    for url in report["only_in_unfiltered_pagination"]:
-        log(f"only_in_unfiltered_pagination: {url}")
-
-    log(f"sets_exactly_equal={report['sets_exactly_equal']}")
 
 
 def normalize_job_tag_key(value: str) -> str:
@@ -753,16 +430,6 @@ def evaluate_job(job: Job) -> dict:
     }
 
 
-def write_json(path: Path | str, payload: dict) -> None:
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
-
-    log(f"wrote file: {path}")
-
-
 def main() -> None:
     started_at = time.time()
     log("program started")
@@ -771,17 +438,15 @@ def main() -> None:
         log("launching chromium")
         browser = p.chromium.launch(headless=True)
 
-        facet_union_urls, discipline_map = collect_job_links_via_facets(browser)
-        unfiltered_pagination_urls = collect_job_links_via_unfiltered_pagination(browser)
-
-        validation_report = build_collection_validation_report(
-            facet_union_urls=facet_union_urls,
-            unfiltered_pagination_urls=unfiltered_pagination_urls,
+        retrieval = sioux_adapter.retrieve_sioux_job_links(browser)
+        sioux_adapter.log_collection_validation_report(retrieval.validation_report)
+        report_writer.write_validation_report(
+            retrieval.validation_report,
+            log_message=log,
         )
-        log_collection_validation_report(validation_report)
-        write_json(VALIDATION_OUTPUT_PATH, validation_report)
 
-        job_links = facet_union_urls
+        job_links = retrieval.job_links
+        discipline_map = retrieval.discipline_map
 
         detail_context = browser.new_context()
         detail_page = detail_context.new_page()
@@ -797,15 +462,14 @@ def main() -> None:
         log(f"closing browser after fetching {len(jobs)} jobs")
         browser.close()
 
-    raw_payload = {
-        "fetched_at_unix": int(time.time()),
-        "source": START_URL,
-        "configured_countries": list(TARGET_COUNTRIES),
-        "configured_languages": list(TARGET_LANGUAGES),
-        "total_jobs": len(jobs),
-        "jobs": [asdict(job) for job in jobs],
-    }
-    write_json(RAW_OUTPUT_PATH, raw_payload)
+    raw_jobs = [asdict(job) for job in jobs]
+    report_writer.write_raw_jobs(
+        jobs=raw_jobs,
+        source=sioux_adapter.START_URL,
+        configured_countries=sioux_adapter.TARGET_COUNTRIES,
+        configured_languages=sioux_adapter.TARGET_LANGUAGES,
+        log_message=log,
+    )
 
     log("starting evaluation")
     evaluated_jobs: list[dict] = []
@@ -838,26 +502,22 @@ def main() -> None:
         job_dict["description_hits"] = evaluation["description_hits"]
         evaluated_jobs.append(job_dict)
 
-    evaluated_payload = {
-        "fetched_at_unix": int(time.time()),
-        "source": START_URL,
-        "configured_countries": list(TARGET_COUNTRIES),
-        "configured_languages": list(TARGET_LANGUAGES),
-        "total_jobs": len(jobs),
-        "jobs": evaluated_jobs,
-    }
-    write_json(EVALUATED_OUTPUT_PATH, evaluated_payload)
+    report_writer.write_evaluated_jobs(
+        jobs=evaluated_jobs,
+        source=sioux_adapter.START_URL,
+        configured_countries=sioux_adapter.TARGET_COUNTRIES,
+        configured_languages=sioux_adapter.TARGET_LANGUAGES,
+        log_message=log,
+    )
 
-    kept_payload = {
-        "fetched_at_unix": int(time.time()),
-        "source": START_URL,
-        "configured_countries": list(TARGET_COUNTRIES),
-        "configured_languages": list(TARGET_LANGUAGES),
-        "total_jobs": len(jobs),
-        "relevant_jobs": len(relevant_jobs),
-        "jobs": [asdict(job) for job in relevant_jobs],
-    }
-    write_json(OUTPUT_PATH, kept_payload)
+    report_writer.write_kept_jobs(
+        jobs=[asdict(job) for job in relevant_jobs],
+        total_jobs=len(jobs),
+        source=sioux_adapter.START_URL,
+        configured_countries=sioux_adapter.TARGET_COUNTRIES,
+        configured_languages=sioux_adapter.TARGET_LANGUAGES,
+        log_message=log,
+    )
 
     elapsed = time.time() - started_at
     log(

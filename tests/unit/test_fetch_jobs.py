@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 import fetch_jobs
 
@@ -128,60 +127,6 @@ def test_evaluate_job_keeps_strong_description_only_match() -> None:
     ]
 
 
-def test_sioux_output_paths_use_analysis_directory() -> None:
-    # Given: the scraper's configured output location
-    expected_dir = Path("data/analysis/sioux")
-
-    # Then: all Sioux artifact paths should resolve under the analysis folder
-    assert fetch_jobs.OUTPUT_DIR == expected_dir
-    assert fetch_jobs.RAW_OUTPUT_PATH == expected_dir / "jobs_sioux_raw.json"
-    assert fetch_jobs.EVALUATED_OUTPUT_PATH == expected_dir / "jobs_sioux_evaluated.json"
-    assert fetch_jobs.OUTPUT_PATH == expected_dir / "jobs_sioux.json"
-    assert fetch_jobs.VALIDATION_OUTPUT_PATH == expected_dir / "jobs_sioux_validation.json"
-
-
-def test_write_json_creates_parent_directories(tmp_path: Path) -> None:
-    # Given: a nested output path that does not exist yet
-    output_path = tmp_path / "data" / "analysis" / "sioux" / "sample.json"
-
-    # When: the helper writes a payload
-    fetch_jobs.write_json(output_path, {"ok": True})
-
-    # Then: the parent folders and file should exist with the payload
-    assert output_path.exists()
-    with output_path.open("r", encoding="utf-8") as file_handle:
-        assert json.load(file_handle) == {"ok": True}
-
-
-def test_build_collection_validation_report_compares_both_sets() -> None:
-    # Given: two collectors with one shared and one mismatched URL each
-    facet_union_urls = [
-        "https://vacancy.sioux.eu/vacancies/shared.html",
-        "https://vacancy.sioux.eu/vacancies/facet-only.html",
-    ]
-    unfiltered_pagination_urls = [
-        "https://vacancy.sioux.eu/vacancies/shared.html",
-        "https://vacancy.sioux.eu/vacancies/unfiltered-only.html",
-    ]
-
-    # When: the validation report is built
-    report = fetch_jobs.build_collection_validation_report(
-        facet_union_urls=facet_union_urls,
-        unfiltered_pagination_urls=unfiltered_pagination_urls,
-    )
-
-    # Then: the exact mismatches and counts should be preserved
-    assert report["facet_union_unique_count"] == 2
-    assert report["unfiltered_pagination_unique_count"] == 2
-    assert report["only_in_facet_union"] == [
-        "https://vacancy.sioux.eu/vacancies/facet-only.html"
-    ]
-    assert report["only_in_unfiltered_pagination"] == [
-        "https://vacancy.sioux.eu/vacancies/unfiltered-only.html"
-    ]
-    assert report["sets_exactly_equal"] is False
-
-
 def test_parse_job_posting_json_ld_blocks_extracts_location_country() -> None:
     # Given: a JobPosting schema block with location metadata
     json_ld_blocks = [
@@ -242,67 +187,3 @@ def test_resolve_job_metadata_prefers_job_tags(monkeypatch) -> None:
         "educational_background": "Bachelor",
         "fulltime_parttime": "Full time",
     }
-
-
-def test_collect_job_links_via_facets_tracks_disciplines_per_url(monkeypatch) -> None:
-    # Given: overlapping facet results for the same vacancy URL
-    class FakePage:
-        url = fetch_jobs.START_URL
-
-        def goto(self, *_args, **_kwargs) -> None:
-            return None
-
-    class FakeContext:
-        def new_page(self) -> FakePage:
-            return FakePage()
-
-        def close(self) -> None:
-            return None
-
-    class FakeBrowser:
-        def new_context(self) -> FakeContext:
-            return FakeContext()
-
-    monkeypatch.setattr(fetch_jobs, "wait_for_results", lambda _page: None)
-    monkeypatch.setattr(
-        fetch_jobs, "close_cookie_banner_if_present", lambda _page: None
-    )
-    monkeypatch.setattr(
-        fetch_jobs,
-        "extract_discipline_facets",
-        lambda _page: [
-            ("Software", "https://example.com/software", 2),
-            ("Electronics", "https://example.com/electronics", 2),
-        ],
-    )
-    monkeypatch.setattr(
-        fetch_jobs,
-        "collect_links_for_facet",
-        lambda _browser, facet_name, _facet_url, _expected_count: {
-            "Software": {
-                "https://vacancy.sioux.eu/vacancies/shared.html",
-                "https://vacancy.sioux.eu/vacancies/software-only.html",
-            },
-            "Electronics": {
-                "https://vacancy.sioux.eu/vacancies/electronics-only.html",
-                "https://vacancy.sioux.eu/vacancies/shared.html",
-            },
-        }[facet_name],
-    )
-
-    # When: the facet collector merges all links
-    job_links, discipline_map = fetch_jobs.collect_job_links_via_facets(FakeBrowser())
-
-    # Then: overlapping URLs should keep all contributing disciplines
-    assert job_links == [
-        "https://vacancy.sioux.eu/vacancies/electronics-only.html",
-        "https://vacancy.sioux.eu/vacancies/shared.html",
-        "https://vacancy.sioux.eu/vacancies/software-only.html",
-    ]
-    assert discipline_map["https://vacancy.sioux.eu/vacancies/shared.html"] == [
-        "Electronics",
-        "Software",
-    ]
-    assert discipline_map["https://vacancy.sioux.eu/vacancies/software-only.html"] == [
-        "Software"
-    ]
