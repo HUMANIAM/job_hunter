@@ -6,11 +6,15 @@ import time
 from dataclasses import dataclass
 from typing import Iterable
 
+from infra.browser import click_if_visible, wait_for_page_ready
+from infra.logging import log
 from playwright.sync_api import Browser, Page
 from shared.normalizer import normalize_text
 
 START_URL = "https://vacancy.sioux.eu/"
 BASE_URL = "https://vacancy.sioux.eu"
+RESULTS_READY_SELECTOR = "a.act-item-job-overview"
+COOKIE_ACCEPT_SELECTOR = "input.cookieClose.cookieAccept"
 
 # Reserved for future parsing-based filtering once structured fields are reliable.
 TARGET_COUNTRIES: tuple[str, ...] = ()
@@ -26,36 +30,12 @@ class SiouxRetrievalResult:
     validation_report: dict[str, object]
 
 
-def log(message: str) -> None:
-    now = time.strftime("%H:%M:%S")
-    print(f"[{now}] {message}")
-
 def absolutize_url(href: str) -> str:
     if href.startswith("http://") or href.startswith("https://"):
         return href
     if href.startswith("/"):
         return BASE_URL + href
     return BASE_URL + "/" + href.lstrip("/")
-
-
-def wait_for_results(page: Page) -> None:
-    page.wait_for_load_state("domcontentloaded")
-    page.wait_for_timeout(1200)
-    try:
-        page.locator("a.act-item-job-overview").first.wait_for(timeout=5000)
-    except Exception:
-        pass
-
-
-def close_cookie_banner_if_present(page: Page) -> None:
-    try:
-        button = page.locator("input.cookieClose.cookieAccept").first
-        if button.count() > 0 and button.is_visible():
-            button.click(timeout=2000)
-            page.wait_for_timeout(500)
-            log("accepted cookie banner")
-    except Exception:
-        pass
 
 
 def extract_discipline_facets(page: Page) -> list[tuple[str, str, int]]:
@@ -142,7 +122,7 @@ def collect_links_from_paginated_listing(
 
         log(f"{context}: following next page -> {next_url}")
         page.goto(next_url, wait_until="domcontentloaded", timeout=30000)
-        wait_for_results(page)
+        wait_for_page_ready(page, RESULTS_READY_SELECTOR)
         page_index += 1
 
     return collected_links
@@ -175,12 +155,13 @@ def collect_links_for_facet(
     try:
         log(f"facet '{facet_name}': opening fresh session")
         page.goto(START_URL, wait_until="domcontentloaded", timeout=30000)
-        wait_for_results(page)
-        close_cookie_banner_if_present(page)
+        wait_for_page_ready(page, RESULTS_READY_SELECTOR)
+        if click_if_visible(page, COOKIE_ACCEPT_SELECTOR):
+            log("accepted cookie banner")
 
         log(f"facet '{facet_name}': opening facet url")
         page.goto(facet_url, wait_until="domcontentloaded", timeout=30000)
-        wait_for_results(page)
+        wait_for_page_ready(page, RESULTS_READY_SELECTOR)
 
         facet_links = collect_links_from_paginated_listing(
             page,
@@ -206,8 +187,9 @@ def collect_job_links_via_facets(
     try:
         log(f"opening entry page: {START_URL}")
         seed_page.goto(START_URL, wait_until="domcontentloaded", timeout=30000)
-        wait_for_results(seed_page)
-        close_cookie_banner_if_present(seed_page)
+        wait_for_page_ready(seed_page, RESULTS_READY_SELECTOR)
+        if click_if_visible(seed_page, COOKIE_ACCEPT_SELECTOR):
+            log("accepted cookie banner")
         log(f"current page url: {seed_page.url}")
 
         facets = extract_discipline_facets(seed_page)
@@ -255,8 +237,9 @@ def collect_job_links_via_unfiltered_pagination(browser: Browser) -> list[str]:
     try:
         log(f"unfiltered overview: opening entry page: {START_URL}")
         page.goto(START_URL, wait_until="domcontentloaded", timeout=30000)
-        wait_for_results(page)
-        close_cookie_banner_if_present(page)
+        wait_for_page_ready(page, RESULTS_READY_SELECTOR)
+        if click_if_visible(page, COOKIE_ACCEPT_SELECTOR):
+            log("accepted cookie banner")
         log(f"unfiltered overview: current page url: {page.url}")
 
         unfiltered_links = collect_links_from_paginated_listing(

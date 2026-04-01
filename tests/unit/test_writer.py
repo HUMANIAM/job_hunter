@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from infra import json_io
 from reporting import writer as output_writer
 
 
@@ -20,19 +21,6 @@ def test_sioux_output_paths_use_analysis_directory() -> None:
         output_writer.VALIDATION_OUTPUT_PATH
         == expected_dir / "jobs_sioux_validation.json"
     )
-
-
-def test_write_json_creates_parent_directories(tmp_path: Path) -> None:
-    # Given: a nested output path that does not exist yet
-    output_path = tmp_path / "data" / "analysis" / "sioux" / "sample.json"
-
-    # When: the writer persists a payload
-    output_writer.write_json(output_path, {"ok": True})
-
-    # Then: the parent folders and file should exist with the payload
-    assert output_path.exists()
-    with output_path.open("r", encoding="utf-8") as file_handle:
-        assert json.load(file_handle) == {"ok": True}
 
 
 def test_write_validation_report_uses_validation_output_path(
@@ -55,6 +43,21 @@ def test_write_validation_report_uses_validation_output_path(
     # Then: the report should be written to the validation output path
     with output_path.open("r", encoding="utf-8") as file_handle:
         assert json.load(file_handle) == validation_report
+
+
+def test_writer_uses_infra_json_io_for_validation_report(monkeypatch) -> None:
+    captured: list[tuple[Path, dict[str, object]]] = []
+
+    monkeypatch.setattr(
+        output_writer.json_io,
+        "write_json",
+        lambda path, payload: captured.append((path, payload)),
+    )
+    validation_report = {"sets_exactly_equal": True}
+
+    output_writer.write_validation_report(validation_report)
+
+    assert captured == [(output_writer.VALIDATION_OUTPUT_PATH, validation_report)]
 
 
 def test_write_raw_jobs_writes_expected_payload(tmp_path: Path, monkeypatch) -> None:

@@ -82,10 +82,8 @@ def test_collect_job_links_via_facets_tracks_disciplines_per_url(monkeypatch) ->
         def new_context(self) -> FakeContext:
             return FakeContext()
 
-    monkeypatch.setattr(sioux_adapter, "wait_for_results", lambda _page: None)
-    monkeypatch.setattr(
-        sioux_adapter, "close_cookie_banner_if_present", lambda _page: None
-    )
+    monkeypatch.setattr(sioux_adapter, "wait_for_page_ready", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(sioux_adapter, "click_if_visible", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(
         sioux_adapter,
         "extract_discipline_facets",

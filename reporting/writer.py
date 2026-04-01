@@ -1,30 +1,16 @@
 from __future__ import annotations
 
-import json
 import time
 from pathlib import Path
 from typing import Any, Callable, Iterable
+
+from infra import json_io
 
 OUTPUT_DIR = Path("data/analysis/sioux")
 RAW_OUTPUT_PATH = OUTPUT_DIR / "jobs_sioux_raw.json"
 EVALUATED_OUTPUT_PATH = OUTPUT_DIR / "jobs_sioux_evaluated.json"
 OUTPUT_PATH = OUTPUT_DIR / "jobs_sioux.json"
 VALIDATION_OUTPUT_PATH = OUTPUT_DIR / "jobs_sioux_validation.json"
-
-
-def write_json(
-    path: Path | str,
-    payload: dict[str, Any],
-    log_message: Callable[[str], None] | None = None,
-) -> None:
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    with path.open("w", encoding="utf-8") as file_handle:
-        json.dump(payload, file_handle, ensure_ascii=False, indent=2)
-
-    if log_message is not None:
-        log_message(f"wrote file: {path}")
 
 
 def _base_payload(
@@ -48,7 +34,9 @@ def write_validation_report(
     *,
     log_message: Callable[[str], None] | None = None,
 ) -> None:
-    write_json(VALIDATION_OUTPUT_PATH, validation_report, log_message)
+    json_io.write_json(VALIDATION_OUTPUT_PATH, validation_report)
+    if log_message is not None:
+        log_message(f"wrote file: {VALIDATION_OUTPUT_PATH}")
 
 
 def write_raw_jobs(
@@ -66,7 +54,9 @@ def write_raw_jobs(
         total_jobs=len(jobs),
     )
     payload["jobs"] = jobs
-    write_json(RAW_OUTPUT_PATH, payload, log_message)
+    json_io.write_json(RAW_OUTPUT_PATH, payload)
+    if log_message is not None:
+        log_message(f"wrote file: {RAW_OUTPUT_PATH}")
     return payload
 
 
@@ -85,7 +75,9 @@ def write_evaluated_jobs(
         total_jobs=len(jobs),
     )
     payload["jobs"] = jobs
-    write_json(EVALUATED_OUTPUT_PATH, payload, log_message)
+    json_io.write_json(EVALUATED_OUTPUT_PATH, payload)
+    if log_message is not None:
+        log_message(f"wrote file: {EVALUATED_OUTPUT_PATH}")
     return payload
 
 
@@ -106,5 +98,7 @@ def write_kept_jobs(
     )
     payload["relevant_jobs"] = len(jobs)
     payload["jobs"] = jobs
-    write_json(OUTPUT_PATH, payload, log_message)
+    json_io.write_json(OUTPUT_PATH, payload)
+    if log_message is not None:
+        log_message(f"wrote file: {OUTPUT_PATH}")
     return payload

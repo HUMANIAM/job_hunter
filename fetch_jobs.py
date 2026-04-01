@@ -30,15 +30,12 @@ import time
 from dataclasses import asdict
 
 from playwright.sync_api import sync_playwright
+from infra.browser import launched_chromium
+from infra.logging import log
 from ranking.evaluator import evaluate_job
 from reporting import writer as report_writer
 from sources.sioux import adapter as sioux_adapter
 from sources.sioux import parser as sioux_parser
-
-
-def log(message: str) -> None:
-    now = time.strftime("%H:%M:%S")
-    print(f"[{now}] {message}")
 
 
 def main() -> None:
@@ -47,36 +44,34 @@ def main() -> None:
 
     with sync_playwright() as p:
         log("launching chromium")
-        browser = p.chromium.launch(headless=True)
-
-        retrieval = sioux_adapter.retrieve_sioux_job_links(browser)
-        sioux_adapter.log_collection_validation_report(retrieval.validation_report)
-        report_writer.write_validation_report(
-            retrieval.validation_report,
-            log_message=log,
-        )
-
-        job_links = retrieval.job_links
-        discipline_map = retrieval.discipline_map
-
-        detail_context = browser.new_context()
-        detail_page = detail_context.new_page()
-
-        jobs: list[sioux_parser.SiouxJob] = []
-        for idx, url in enumerate(job_links, start=1):
-            log(f"fetch progress: [{idx}/{len(job_links)}]")
-            job = sioux_parser.fetch_job(
-                detail_page,
-                url,
-                discipline_map.get(url, []),
+        with launched_chromium(p, headless=True) as browser:
+            retrieval = sioux_adapter.retrieve_sioux_job_links(browser)
+            sioux_adapter.log_collection_validation_report(retrieval.validation_report)
+            report_writer.write_validation_report(
+                retrieval.validation_report,
                 log_message=log,
             )
-            if job:
-                jobs.append(job)
 
-        detail_context.close()
-        log(f"closing browser after fetching {len(jobs)} jobs")
-        browser.close()
+            job_links = retrieval.job_links
+            discipline_map = retrieval.discipline_map
+
+            detail_context = browser.new_context()
+            detail_page = detail_context.new_page()
+
+            jobs: list[sioux_parser.SiouxJob] = []
+            for idx, url in enumerate(job_links, start=1):
+                log(f"fetch progress: [{idx}/{len(job_links)}]")
+                job = sioux_parser.fetch_job(
+                    detail_page,
+                    url,
+                    discipline_map.get(url, []),
+                    log_message=log,
+                )
+                if job:
+                    jobs.append(job)
+
+            detail_context.close()
+            log(f"closing browser after fetching {len(jobs)} jobs")
 
     raw_jobs = [asdict(job) for job in jobs]
     report_writer.write_raw_jobs(
