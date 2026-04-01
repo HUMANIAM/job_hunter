@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 
-from infra import json_io
 from reporting import writer as output_writer
 
 
@@ -20,6 +19,28 @@ def test_sioux_output_paths_use_analysis_directory() -> None:
     assert (
         output_writer.VALIDATION_OUTPUT_PATH
         == expected_dir / "jobs_sioux_validation.json"
+    )
+
+
+def test_output_paths_can_be_computed_for_other_company() -> None:
+    expected_dir = Path("data/analysis/asml")
+
+    assert output_writer.output_dir_for("asml") == expected_dir
+    assert (
+        output_writer.raw_output_path_for("asml")
+        == expected_dir / "jobs_asml_raw.json"
+    )
+    assert (
+        output_writer.evaluated_output_path_for("asml")
+        == expected_dir / "jobs_asml_evaluated.json"
+    )
+    assert (
+        output_writer.kept_output_path_for("asml")
+        == expected_dir / "jobs_asml.json"
+    )
+    assert (
+        output_writer.validation_output_path_for("asml")
+        == expected_dir / "jobs_asml_validation.json"
     )
 
 
@@ -58,6 +79,26 @@ def test_writer_uses_infra_json_io_for_validation_report(monkeypatch) -> None:
     output_writer.write_validation_report(validation_report)
 
     assert captured == [(output_writer.VALIDATION_OUTPUT_PATH, validation_report)]
+
+
+def test_writer_uses_company_specific_validation_path(monkeypatch) -> None:
+    captured: list[tuple[Path, dict[str, object]]] = []
+
+    monkeypatch.setattr(
+        output_writer.json_io,
+        "write_json",
+        lambda path, payload: captured.append((path, payload)),
+    )
+    validation_report = {"sets_exactly_equal": True}
+
+    output_writer.write_validation_report(
+        validation_report,
+        company_slug="asml",
+    )
+
+    assert captured == [
+        (output_writer.validation_output_path_for("asml"), validation_report)
+    ]
 
 
 def test_write_raw_jobs_writes_expected_payload(tmp_path: Path, monkeypatch) -> None:

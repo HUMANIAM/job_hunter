@@ -2,22 +2,16 @@
 # pyright: reportMissingImports=false
 # mypy: disable-error-code=import-not-found
 """
-Sioux jobs fetcher.
+Company jobs fetcher.
 
 What it does:
-- opens the Sioux vacancies overview page
-- reads discipline facet URLs from the HTML
-- visits each discipline in a fresh browser context to avoid sticky facet state
-- follows real paging links when needed
-- collects vacancy detail links under /vacancies/
+- resolves the requested company source from the registry
+- opens the company vacancies overview page
+- collects vacancy detail links
 - visits each vacancy page
 - extracts useful fields
 - applies a keep/skip filter
-- writes four files:
-    1) jobs_sioux_raw.json
-    2) jobs_sioux_evaluated.json
-    3) jobs_sioux.json
-    4) jobs_sioux_validation.json
+- writes four company-keyed files under data/analysis/<company>
 
 Requirements:
     pip install playwright
@@ -26,59 +20,86 @@ Requirements:
 
 from __future__ import annotations
 
+import argparse
 import time
 from dataclasses import asdict
+from typing import Any, Sequence
 
 from playwright.sync_api import sync_playwright
 from infra.browser import launched_chromium
 from infra.logging import log
 from ranking.service import evaluate_jobs
 from reporting import writer as report_writer
-from sources.sioux import adapter as sioux_adapter
-from sources.sioux import parser as sioux_parser
+from sources.base import SourceDefinition
+from sources.registry import get_source, list_available_sources
 
 
-def main() -> None:
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Fetch jobs for a company source.")
+    parser.add_argument(
+        "--company",
+        default="sioux",
+        help=(
+            "Company/source slug to fetch. "
+            f"Available: {', '.join(list_available_sources())}"
+        ),
+    )
+    return parser.parse_args(list(argv) if argv is not None else None)
+
+
+def fetch_source_jobs(browser: Any, source: SourceDefinition) -> list[Any]:
+    retrieval = source.adapter.retrieve_job_links(browser)
+    source.adapter.log_validation_report(retrieval.validation_report)
+    report_writer.write_validation_report(
+        retrieval.validation_report,
+        company_slug=source.company_slug,
+        log_message=log,
+    )
+
+    job_links = retrieval.job_links
+    discipline_map = retrieval.discipline_map
+
+    detail_context = browser.new_context()
+    detail_page = detail_context.new_page()
+
+    jobs: list[Any] = []
+    for idx, url in enumerate(job_links, start=1):
+        log(f"fetch progress: [{idx}/{len(job_links)}]")
+        job = source.parser.fetch_job(
+            detail_page,
+            url,
+            discipline_map.get(url, []),
+            log_message=log,
+        )
+        if job:
+            jobs.append(job)
+
+    detail_context.close()
+    log(f"closing browser after fetching {len(jobs)} jobs")
+    return jobs
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    args = parse_args(argv)
+    try:
+        source = get_source(args.company)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     started_at = time.time()
     log("program started")
 
     with sync_playwright() as p:
         log("launching chromium")
         with launched_chromium(p, headless=True) as browser:
-            retrieval = sioux_adapter.retrieve_sioux_job_links(browser)
-            sioux_adapter.log_collection_validation_report(retrieval.validation_report)
-            report_writer.write_validation_report(
-                retrieval.validation_report,
-                log_message=log,
-            )
-
-            job_links = retrieval.job_links
-            discipline_map = retrieval.discipline_map
-
-            detail_context = browser.new_context()
-            detail_page = detail_context.new_page()
-
-            jobs: list[sioux_parser.SiouxJob] = []
-            for idx, url in enumerate(job_links, start=1):
-                log(f"fetch progress: [{idx}/{len(job_links)}]")
-                job = sioux_parser.fetch_job(
-                    detail_page,
-                    url,
-                    discipline_map.get(url, []),
-                    log_message=log,
-                )
-                if job:
-                    jobs.append(job)
-
-            detail_context.close()
-            log(f"closing browser after fetching {len(jobs)} jobs")
+            jobs = fetch_source_jobs(browser, source)
 
     raw_jobs = [asdict(job) for job in jobs]
     report_writer.write_raw_jobs(
         jobs=raw_jobs,
-        source=sioux_adapter.START_URL,
-        configured_countries=sioux_adapter.TARGET_COUNTRIES,
-        configured_languages=sioux_adapter.TARGET_LANGUAGES,
+        source=source.source_url,
+        configured_countries=source.configured_countries,
+        configured_languages=source.configured_languages,
+        company_slug=source.company_slug,
         log_message=log,
     )
 
@@ -87,18 +108,20 @@ def main() -> None:
 
     report_writer.write_evaluated_jobs(
         jobs=ranking_result.evaluated_jobs,
-        source=sioux_adapter.START_URL,
-        configured_countries=sioux_adapter.TARGET_COUNTRIES,
-        configured_languages=sioux_adapter.TARGET_LANGUAGES,
+        source=source.source_url,
+        configured_countries=source.configured_countries,
+        configured_languages=source.configured_languages,
+        company_slug=source.company_slug,
         log_message=log,
     )
 
     report_writer.write_kept_jobs(
         jobs=[asdict(job) for job in ranking_result.kept_jobs],
         total_jobs=len(jobs),
-        source=sioux_adapter.START_URL,
-        configured_countries=sioux_adapter.TARGET_COUNTRIES,
-        configured_languages=sioux_adapter.TARGET_LANGUAGES,
+        source=source.source_url,
+        configured_countries=source.configured_countries,
+        configured_languages=source.configured_languages,
+        company_slug=source.company_slug,
         log_message=log,
     )
 
