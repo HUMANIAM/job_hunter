@@ -9,6 +9,9 @@ from ranking import evaluator as ranking_evaluator
 class FakeJob:
     title: str | None
     description_text: str | None
+    required_languages: list[str] | None = None
+    restrictions: list[str] | None = None
+    min_years_experience: int | None = None
 
 
 def test_matched_keywords_uses_boundaries_for_short_keywords() -> None:
@@ -47,8 +50,8 @@ def test_evaluate_job_skips_only_by_title() -> None:
     assert evaluation["title_hits"] == ["controls"]
 
 
-def test_evaluate_job_rejects_skip_title_keyword() -> None:
-    # Given: a title that is clearly outside the target profile
+def test_evaluate_job_can_keep_non_target_title_from_description_signal() -> None:
+    # Given: a non-target title with strong technical description keywords
     job = FakeJob(
         title="Supply Chain Planner",
         description_text="Python dashboards and automation for operations.",
@@ -57,10 +60,76 @@ def test_evaluate_job_rejects_skip_title_keyword() -> None:
     # When: the job is evaluated
     evaluation = ranking_evaluator.evaluate_job(job)
 
-    # Then: the skip title keyword should override keep terms
+    # Then: the title alone should not force a reject anymore
+    assert evaluation["decision"] == "keep"
+    assert evaluation["reason"] == "description_keep_match"
+    assert evaluation["skip_hits"] == []
+    assert evaluation["description_hits"] == ["python", "automation"]
+
+
+def test_evaluate_job_skips_excluded_job_type_before_keyword_matching() -> None:
+    job = FakeJob(
+        title="Embedded Software Internship",
+        description_text="Python and Linux work on machine learning systems.",
+    )
+
+    evaluation = ranking_evaluator.evaluate_job(job)
+
     assert evaluation["decision"] == "skip"
-    assert evaluation["reason"] == "skip_title_keywords"
-    assert evaluation["skip_hits"] == ["supply chain", "planner"]
+    assert evaluation["reason"] == "hard_filter_exclude_job_type"
+    assert evaluation["skip_hits"] == ["job_type:internship"]
+    assert evaluation["title_hits"] == []
+    assert evaluation["description_hits"] == []
+
+
+def test_evaluate_job_skips_excluded_required_language_before_keyword_matching() -> None:
+    job = FakeJob(
+        title="Embedded Software Engineer",
+        description_text="Python and Linux work on machine learning systems.",
+        required_languages=["english", "dutch"],
+    )
+
+    evaluation = ranking_evaluator.evaluate_job(job)
+
+    assert evaluation["decision"] == "skip"
+    assert evaluation["reason"] == "hard_filter_required_language"
+    assert evaluation["skip_hits"] == ["required_language:dutch"]
+    assert evaluation["title_hits"] == []
+    assert evaluation["description_hits"] == []
+
+
+def test_evaluate_job_skips_when_min_years_experience_exceeds_limit() -> None:
+    job = FakeJob(
+        title="Embedded Software Engineer",
+        description_text="Python and Linux work on machine learning systems.",
+        min_years_experience=8,
+    )
+
+    evaluation = ranking_evaluator.evaluate_job(job)
+
+    assert evaluation["decision"] == "skip"
+    assert evaluation["reason"] == "hard_filter_min_years_experience"
+    assert evaluation["skip_hits"] == ["min_years_experience:8"]
+    assert evaluation["title_hits"] == []
+    assert evaluation["description_hits"] == []
+
+
+def test_evaluate_job_skips_export_control_clearance_restriction() -> None:
+    job = FakeJob(
+        title="Embedded Software Engineer",
+        description_text="Python and Linux work on machine learning systems.",
+        restrictions=["eligible for Dutch security clearance"],
+    )
+
+    evaluation = ranking_evaluator.evaluate_job(job)
+
+    assert evaluation["decision"] == "skip"
+    assert evaluation["reason"] == "hard_filter_export_control_clearance"
+    assert evaluation["skip_hits"] == [
+        "restriction:export_control_or_security_clearance"
+    ]
+    assert evaluation["title_hits"] == []
+    assert evaluation["description_hits"] == []
 
 
 def test_evaluate_job_rejects_low_signal_description_only_match() -> None:

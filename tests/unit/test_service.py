@@ -10,6 +10,9 @@ class FakeJob:
     title: str | None
     description_text: str | None
     url: str
+    required_languages: list[str] | None = None
+    restrictions: list[str] | None = None
+    min_years_experience: int | None = None
 
 
 def test_evaluate_jobs_builds_evaluated_jobs_and_kept_subset() -> None:
@@ -23,6 +26,7 @@ def test_evaluate_jobs_builds_evaluated_jobs_and_kept_subset() -> None:
             title="Supply Chain Planner",
             description_text="Python dashboards and automation for operations.",
             url="https://example.com/supply-chain-planner",
+            required_languages=["english", "dutch"],
         ),
     ]
     messages: list[str] = []
@@ -35,6 +39,9 @@ def test_evaluate_jobs_builds_evaluated_jobs_and_kept_subset() -> None:
             "title": "Controls Engineer",
             "description_text": "Control software for high-tech systems.",
             "url": "https://example.com/controls-engineer",
+            "required_languages": None,
+            "restrictions": None,
+            "min_years_experience": None,
             "decision": "keep",
             "reason": "title_keep_match",
             "skip_hits": [],
@@ -45,9 +52,12 @@ def test_evaluate_jobs_builds_evaluated_jobs_and_kept_subset() -> None:
             "title": "Supply Chain Planner",
             "description_text": "Python dashboards and automation for operations.",
             "url": "https://example.com/supply-chain-planner",
+            "required_languages": ["english", "dutch"],
+            "restrictions": None,
+            "min_years_experience": None,
             "decision": "skip",
-            "reason": "skip_title_keywords",
-            "skip_hits": ["supply chain", "planner"],
+            "reason": "hard_filter_required_language",
+            "skip_hits": ["required_language:dutch"],
             "title_hits": [],
             "description_hits": [],
         },
@@ -61,8 +71,8 @@ def test_evaluate_jobs_builds_evaluated_jobs_and_kept_subset() -> None:
         ),
         (
             "SKIP [2] 'Supply Chain Planner' | "
-            "reason=skip_title_keywords | "
-            "skip_hits=['supply chain', 'planner'] | "
+            "reason=hard_filter_required_language | "
+            "skip_hits=['required_language:dutch'] | "
             "description_hits=[]"
         ),
     ]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
 from typing import Iterable, Protocol
 
@@ -7,67 +8,38 @@ from typing import Iterable, Protocol
 class EvaluatableJob(Protocol):
     title: str | None
     description_text: str | None
+    required_languages: list[str] | None
+    restrictions: list[str] | None
+    min_years_experience: int | None
 
 
-SKIP_TITLE_KEYWORDS = [
-    "intern",
-    "internship",
-    "trainee",
-    "graduate",
-    "thesis",
-    "recruiter",
-    "talent acquisition",
-    "hr",
-    "human resources",
-    "payroll",
-    "compensation",
-    "benefits",
-    "people partner",
-    "finance",
-    "financial",
-    "controller",
-    "accounting",
-    "tax",
-    "treasury",
-    "audit",
-    "procurement",
-    "purchasing",
-    "buyer",
-    "sourcing",
-    "commodity manager",
-    "supply chain",
-    "logistics",
-    "warehouse",
-    "planner",
-    "marketing",
-    "brand",
-    "communications",
-    "communication",
-    "public relations",
-    "content specialist",
-    "sales",
-    "account manager",
-    "business development",
-    "commercial",
-    "legal",
-    "counsel",
-    "compliance",
-    "privacy officer",
-    "facility",
-    "facilities",
-    "real estate",
-    "workplace services",
-    "customer support",
-    "service desk",
-    "helpdesk",
-    "administrative",
-    "administrator",
-    "office manager",
-    "operator",
-    "technician",
-    "assembler",
-    "manufacturing associate",
-]
+@dataclass
+class HardFilterPolicy:
+    excluded_job_types: set[str]
+    excluded_required_languages: set[str]
+    require_export_control_clearance_absent: bool
+    max_min_years_experience: int | None
+
+
+DEFAULT_HARD_FILTER_POLICY = HardFilterPolicy(
+    excluded_job_types={"internship", "thesis", "graduation_assignment"},
+    excluded_required_languages={"dutch"},
+    require_export_control_clearance_absent=True,
+    max_min_years_experience=7,
+)
+
+EXCLUDED_JOB_TYPE_PATTERNS = {
+    "internship": re.compile(r"(?<![a-z0-9])internships?(?![a-z0-9])"),
+    "thesis": re.compile(r"(?<![a-z0-9])thesis(?![a-z0-9])"),
+    "graduation_assignment": re.compile(
+        r"(?<![a-z0-9])graduation assignments?(?![a-z0-9])"
+    ),
+}
+EXPORT_CONTROL_CLEARANCE_MARKERS = (
+    "export control",
+    "security clearance",
+)
+
 
 KEEP_KEYWORDS = [
     "c++",
@@ -113,8 +85,6 @@ def compile_keyword_patterns(keywords: Iterable[str]) -> tuple[re.Pattern[str], 
         patterns.append(re.compile(rf"(?<![a-z0-9]){escaped}(?![a-z0-9])"))
     return tuple(patterns)
 
-
-SKIP_TITLE_PATTERNS = compile_keyword_patterns(SKIP_TITLE_KEYWORDS)
 KEEP_PATTERNS = compile_keyword_patterns(KEEP_KEYWORDS)
 
 
@@ -131,9 +101,98 @@ def matched_keywords(
     ]
 
 
-def evaluate_job(job: EvaluatableJob) -> dict:
+def detect_job_types(title: str) -> list[str]:
+    normalized_title = title.lower()
+    return [
+        job_type
+        for job_type, pattern in EXCLUDED_JOB_TYPE_PATTERNS.items()
+        if pattern.search(normalized_title)
+    ]
+
+
+def has_export_control_or_clearance_restriction(restrictions: Iterable[str]) -> bool:
+    return any(
+        marker in restriction.lower()
+        for restriction in restrictions
+        for marker in EXPORT_CONTROL_CLEARANCE_MARKERS
+    )
+
+
+def evaluate_hard_filters(
+    job: EvaluatableJob,
+    policy: HardFilterPolicy = DEFAULT_HARD_FILTER_POLICY,
+) -> dict | None:
+    title = job.title or ""
+    matched_job_types = [
+        job_type
+        for job_type in detect_job_types(title)
+        if job_type in policy.excluded_job_types
+    ]
+    if matched_job_types:
+        return {
+            "decision": "skip",
+            "reason": "hard_filter_exclude_job_type",
+            "skip_hits": [f"job_type:{job_type}" for job_type in matched_job_types],
+            "title_hits": [],
+            "description_hits": [],
+        }
+
+    required_languages = [
+        language.lower()
+        for language in (getattr(job, "required_languages", None) or [])
+    ]
+    matched_languages = sorted(
+        set(required_languages) & policy.excluded_required_languages
+    )
+    if matched_languages:
+        return {
+            "decision": "skip",
+            "reason": "hard_filter_required_language",
+            "skip_hits": [f"required_language:{language}" for language in matched_languages],
+            "title_hits": [],
+            "description_hits": [],
+        }
+
+    restrictions = getattr(job, "restrictions", None) or []
+    if (
+        policy.require_export_control_clearance_absent
+        and has_export_control_or_clearance_restriction(restrictions)
+    ):
+        return {
+            "decision": "skip",
+            "reason": "hard_filter_export_control_clearance",
+            "skip_hits": ["restriction:export_control_or_security_clearance"],
+            "title_hits": [],
+            "description_hits": [],
+        }
+
+    min_years_experience = getattr(job, "min_years_experience", None)
+    if (
+        policy.max_min_years_experience is not None
+        and min_years_experience is not None
+        and min_years_experience > policy.max_min_years_experience
+    ):
+        return {
+            "decision": "skip",
+            "reason": "hard_filter_min_years_experience",
+            "skip_hits": [f"min_years_experience:{min_years_experience}"],
+            "title_hits": [],
+            "description_hits": [],
+        }
+
+    return None
+
+
+def evaluate_job(
+    job: EvaluatableJob,
+    hard_filter_policy: HardFilterPolicy = DEFAULT_HARD_FILTER_POLICY,
+) -> dict:
     title = job.title or ""
     description = job.description_text or ""
+
+    hard_filter_evaluation = evaluate_hard_filters(job, hard_filter_policy)
+    if hard_filter_evaluation is not None:
+        return hard_filter_evaluation
 
     title_hits = matched_keywords(title, KEEP_KEYWORDS, KEEP_PATTERNS)
     if title_hits:
@@ -142,16 +201,6 @@ def evaluate_job(job: EvaluatableJob) -> dict:
             "reason": "title_keep_match",
             "skip_hits": [],
             "title_hits": title_hits,
-            "description_hits": [],
-        }
-
-    skip_hits = matched_keywords(title, SKIP_TITLE_KEYWORDS, SKIP_TITLE_PATTERNS)
-    if skip_hits:
-        return {
-            "decision": "skip",
-            "reason": "skip_title_keywords",
-            "skip_hits": skip_hits,
-            "title_hits": [],
             "description_hits": [],
         }
 
