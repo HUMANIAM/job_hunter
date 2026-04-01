@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "search_profile/search_profile.schema.json",
+  "title": "Candidate Search Profile",
+  "description": "Schema for structured candidate profile extraction from CV/resume text.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "source_text_hash",
+    "schema_version",
+    "profile"
+  ],
+  "properties": {
+    "source_text_hash": {
+      "type": "string"
+    },
+    "schema_version": {
+      "type": "string"
+    },
+    "profile": {
+      "$ref": "#/$defs/searchProfile"
+    }
+  },
+  "$defs": {
+    "nullableString": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "nullableInteger": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "skillStrength": {
+      "enum": [
+        "core",
+        "strong",
+        "secondary",
+        "exposure"
+      ]
+    },
+    "languageLevel": {
+      "enum": [
+        "native",
+        "fluent",
+        "professional",
+        "conversational",
+        "basic",
+        "none",
+        null
+      ]
+    },
+    "seniorityHint": {
+      "enum": [
+        "junior",
+        "medior",
+        "senior",
+        "lead",
+        "principal",
+        "staff",
+        null
+      ]
+    },
+    "namedStrengthItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "strength"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "strength": {
+          "$ref": "#/$defs/skillStrength"
+        }
+      }
+    },
+    "languageItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "level"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "level": {
+          "$ref": "#/$defs/languageLevel"
+        }
+      }
+    },
+    "candidateConstraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preferred_locations",
+        "excluded_locations",
+        "preferred_workplace_types",
+        "excluded_workplace_types",
+        "requires_visa_sponsorship",
+        "avoid_export_control_roles",
+        "notes"
+      ],
+      "properties": {
+        "preferred_locations": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "excluded_locations": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "preferred_workplace_types": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "excluded_workplace_types": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "requires_visa_sponsorship": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "avoid_export_control_roles": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "notes": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "searchProfileEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "skills",
+        "languages",
+        "protocols",
+        "standards",
+        "domains",
+        "seniority_hint",
+        "years_experience_total",
+        "candidate_constraints"
+      ],
+      "properties": {
+        "skills": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "languages": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "protocols": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "standards": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "domains": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "seniority_hint": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "years_experience_total": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "candidate_constraints": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "searchProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "skills",
+        "languages",
+        "protocols",
+        "standards",
+        "domains",
+        "seniority_hint",
+        "years_experience_total",
+        "candidate_constraints",
+        "evidence"
+      ],
+      "properties": {
+        "skills": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/namedStrengthItem"
+          }
+        },
+        "languages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/languageItem"
+          }
+        },
+        "protocols": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/namedStrengthItem"
+          }
+        },
+        "standards": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/namedStrengthItem"
+          }
+        },
+        "domains": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/namedStrengthItem"
+          }
+        },
+        "seniority_hint": {
+          "$ref": "#/$defs/seniorityHint"
+        },
+        "years_experience_total": {
+          "$ref": "#/$defs/nullableInteger"
+        },
+        "candidate_constraints": {
+          "$ref": "#/$defs/candidateConstraints"
+        },
+        "evidence": {
+          "$ref": "#/$defs/searchProfileEvidence"
+        }
+      }
+    }
+  }
+}
