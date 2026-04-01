@@ -21,7 +21,7 @@ This project uses the local virtual environment that already exists in the repos
 Run tests:
 
 ```bash
-.venv/bin/python -m unittest test_fetch_jobs.py
+.venv/bin/python -m pytest tests/test_fetch_jobs.py
 ```
 
 Run a syntax check:
