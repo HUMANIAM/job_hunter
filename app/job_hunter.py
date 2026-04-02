@@ -86,10 +86,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--candidate-profile",
+        "--cv",
         type=Path,
+        dest="candidate_profile",
         default=DEFAULT_CANDIDATE_PROFILE_PATH,
         help=(
-            "Candidate profile JSON to rank against. "
+            "Candidate profile JSON/CV path to rank against. "
             f"Defaults to {DEFAULT_CANDIDATE_PROFILE_PATH}."
         ),
     )

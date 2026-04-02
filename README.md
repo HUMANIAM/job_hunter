@@ -55,7 +55,7 @@ Use a specific candidate profile:
 ```bash
 .venv/bin/python app/job_hunter.py \
   --company sioux \
-  --candidate-profile data/candidate_profiles/Ibrahim_Saad_CV.json
+  --cv data/candidate_profiles/Ibrahim_Saad_CV.json
 ```
 
 Write all optional debug artifacts as well:
@@ -71,7 +71,7 @@ Write all optional debug artifacts as well:
 ### CLI Options
 
 - `--company <slug>`: source/company slug to fetch. Defaults to `sioux`.
-- `--candidate-profile <path>`: candidate profile JSON used for ranking.
+- `--candidate-profile <path>` / `--cv <path>`: candidate profile JSON used for ranking.
 - `--write-raw`: write per-job raw collected job artifacts.
 - `--write-evaluated`: write per-job evaluated job artifacts with embedded ranking metadata.
 - `--write-validation`: write the collection validation artifact.
