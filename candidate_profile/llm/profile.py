@@ -77,6 +77,19 @@ def compute_source_text_hash(profile_text: str) -> str:
     return hashlib.sha256(profile_text.encode("utf-8")).hexdigest()
 
 
+def compute_candidate_id(
+    profile_text: str,
+    candidate_id: str | None = None,
+) -> str:
+    if candidate_id is not None:
+        normalized = normalize_text(candidate_id)
+        if not normalized:
+            raise ValueError("candidate_id must not be empty")
+        return normalized
+
+    return f"candidate_{compute_source_text_hash(profile_text)[:12]}"
+
+
 class CandidateProfileEvidenceBackedItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -301,9 +314,18 @@ class CandidateProfilePayload(BaseModel):
 class CandidateProfileDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    candidate_id: str
     source_text_hash: str
     schema_version: str
     profile: CandidateProfilePayload
+
+    @field_validator("candidate_id", mode="before")
+    @classmethod
+    def validate_candidate_id(cls, value: Any) -> str:
+        normalized = normalize_text(str(value or ""))
+        if not normalized:
+            raise ValueError("candidate_id must not be empty")
+        return normalized
 
     @field_validator("source_text_hash")
     @classmethod
@@ -435,6 +457,7 @@ class CandidateProfileExtractor:
         self,
         profile_text: str,
         *,
+        candidate_id: str | None = None,
         candidate_context: Any | None = None,
     ) -> CandidateProfileDocument:
         profile = self._extractor.extract(
@@ -444,6 +467,10 @@ class CandidateProfileExtractor:
             )
         )
         return CandidateProfileDocument(
+            candidate_id=compute_candidate_id(
+                profile_text,
+                candidate_id=candidate_id,
+            ),
             source_text_hash=compute_source_text_hash(profile_text),
             schema_version=CANDIDATE_PROFILE_SCHEMA_VERSION,
             profile=profile,
@@ -458,12 +485,14 @@ def get_default_candidate_profile_extractor() -> CandidateProfileExtractor:
 def extract_profile(
     profile_text: str,
     *,
+    candidate_id: str | None = None,
     candidate_context: Any | None = None,
     extractor: CandidateProfileExtractor | None = None,
 ) -> CandidateProfileDocument:
     active_extractor = extractor or get_default_candidate_profile_extractor()
     return active_extractor.extract(
         profile_text,
+        candidate_id=candidate_id,
         candidate_context=candidate_context,
     )
 
@@ -506,6 +535,7 @@ __all__ = [
     "SearchProfilePayload",
     "SearchProfileDocument",
     "SearchProfileExtractor",
+    "compute_candidate_id",
     "compute_source_text_hash",
     "extract_profile",
     "get_default_candidate_profile_extractor",

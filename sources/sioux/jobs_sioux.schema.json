@@ -459,6 +459,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "job_id",
         "title",
         "url",
         "disciplines",
@@ -491,6 +492,9 @@
         "description_text"
       ],
       "properties": {
+        "job_id": {
+          "type": "string"
+        },
         "title": {
           "type": "string"
         },

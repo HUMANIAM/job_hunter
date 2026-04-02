@@ -13,6 +13,7 @@ from candidate_profile.llm.profile import (
     CandidateProfileDocument,
     CandidateProfileExtractor,
     CandidateProfilePayload,
+    compute_candidate_id,
     _load_system_message,
     compute_source_text_hash,
     render_candidate_profile_user_message,
@@ -247,6 +248,9 @@ def test_candidate_profile_extractor_returns_schema_document() -> None:
     )
 
     assert document == CandidateProfileDocument(
+        candidate_id=compute_candidate_id(
+            "Senior Python engineer with CAN and IEC 61508 experience."
+        ),
         source_text_hash=compute_source_text_hash(
             "Senior Python engineer with CAN and IEC 61508 experience."
         ),
@@ -260,3 +264,34 @@ def test_candidate_profile_extractor_returns_schema_document() -> None:
     )
     assert calls[0]["response_format"] is CandidateProfilePayload
     assert '"target_locations": [' in calls[0]["messages"][1]["content"]
+
+
+def test_candidate_profile_extractor_uses_explicit_candidate_id() -> None:
+    class FakeCompletions:
+        def parse(self, **_kwargs: object) -> object:
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            parsed=CandidateProfilePayload.model_validate(
+                                _profile_payload_dict()
+                            ),
+                            refusal=None,
+                        )
+                    )
+                ]
+            )
+
+    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
+    extractor = CandidateProfileExtractor(
+        client=fake_client,
+        model="gpt-test",
+        timeout_seconds=9.0,
+    )
+
+    document = extractor.extract(
+        "Senior Python engineer with CAN and IEC 61508 experience.",
+        candidate_id=" Ibrahim_Saad_CV ",
+    )
+
+    assert document.candidate_id == "Ibrahim_Saad_CV"
