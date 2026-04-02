@@ -23,16 +23,15 @@
   },
   "$defs": {
     "nullableString": {
-      "type": [
-        "string",
-        "null"
-      ]
+      "type": ["string", "null"]
     },
     "nullableInteger": {
-      "type": [
-        "integer",
-        "null"
-      ]
+      "type": ["integer", "null"]
+    },
+    "confidenceScore": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
     },
     "stringArray": {
       "type": "array",
@@ -70,12 +69,14 @@
         null
       ]
     },
-    "namedStrengthItem": {
+    "featureItem": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "name",
-        "strength"
+        "strength",
+        "confidence",
+        "evidence"
       ],
       "properties": {
         "name": {
@@ -83,6 +84,12 @@
         },
         "strength": {
           "$ref": "#/$defs/skillStrength"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidenceScore"
+        },
+        "evidence": {
+          "$ref": "#/$defs/stringArray"
         }
       }
     },
@@ -91,7 +98,9 @@
       "additionalProperties": false,
       "required": [
         "name",
-        "level"
+        "level",
+        "confidence",
+        "evidence"
       ],
       "properties": {
         "name": {
@@ -99,6 +108,52 @@
         },
         "level": {
           "$ref": "#/$defs/languageLevel"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidenceScore"
+        },
+        "evidence": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "seniorityItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "confidence",
+        "evidence"
+      ],
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/seniorityHint"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidenceScore"
+        },
+        "evidence": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "yearsExperienceItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "confidence",
+        "evidence"
+      ],
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/nullableInteger"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidenceScore"
+        },
+        "evidence": {
+          "$ref": "#/$defs/stringArray"
         }
       }
     },
@@ -112,7 +167,9 @@
         "excluded_workplace_types",
         "requires_visa_sponsorship",
         "avoid_export_control_roles",
-        "notes"
+        "notes",
+        "confidence",
+        "evidence"
       ],
       "properties": {
         "preferred_locations": {
@@ -128,58 +185,18 @@
           "$ref": "#/$defs/stringArray"
         },
         "requires_visa_sponsorship": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         },
         "avoid_export_control_roles": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         },
         "notes": {
           "$ref": "#/$defs/stringArray"
-        }
-      }
-    },
-    "searchProfileEvidence": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "skills",
-        "languages",
-        "protocols",
-        "standards",
-        "domains",
-        "seniority_hint",
-        "years_experience_total",
-        "candidate_constraints"
-      ],
-      "properties": {
-        "skills": {
-          "$ref": "#/$defs/stringArray"
         },
-        "languages": {
-          "$ref": "#/$defs/stringArray"
+        "confidence": {
+          "$ref": "#/$defs/confidenceScore"
         },
-        "protocols": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "standards": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "domains": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "seniority_hint": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "years_experience_total": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "candidate_constraints": {
+        "evidence": {
           "$ref": "#/$defs/stringArray"
         }
       }
@@ -193,16 +210,15 @@
         "protocols",
         "standards",
         "domains",
-        "seniority_hint",
+        "seniority",
         "years_experience_total",
-        "candidate_constraints",
-        "evidence"
+        "candidate_constraints"
       ],
       "properties": {
         "skills": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/namedStrengthItem"
+            "$ref": "#/$defs/featureItem"
           }
         },
         "languages": {
@@ -214,32 +230,29 @@
         "protocols": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/namedStrengthItem"
+            "$ref": "#/$defs/featureItem"
           }
         },
         "standards": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/namedStrengthItem"
+            "$ref": "#/$defs/featureItem"
           }
         },
         "domains": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/namedStrengthItem"
+            "$ref": "#/$defs/featureItem"
           }
         },
-        "seniority_hint": {
-          "$ref": "#/$defs/seniorityHint"
+        "seniority": {
+          "$ref": "#/$defs/seniorityItem"
         },
         "years_experience_total": {
-          "$ref": "#/$defs/nullableInteger"
+          "$ref": "#/$defs/yearsExperienceItem"
         },
         "candidate_constraints": {
           "$ref": "#/$defs/candidateConstraints"
-        },
-        "evidence": {
-          "$ref": "#/$defs/searchProfileEvidence"
         }
       }
     }

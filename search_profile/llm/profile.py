@@ -19,12 +19,20 @@ from shared.llm import (
     require_env_value,
 )
 
-DEFAULT_SEARCH_PROFILE_LLM_MODEL = "gpt-4.1-mini"
-SEARCH_PROFILE_SCHEMA_VERSION = "1.0.0"
+DEFAULT_SEARCH_PROFILE_LLM_MODEL = "gpt-5.4-mini"
+DEFAULT_SEARCH_PROFILE_MAX_COMPLETION_TOKENS = 3000
+SEARCH_PROFILE_SCHEMA_VERSION = "2.0.0"
 
 SCHEMA_PATH = Path(__file__).with_name("search_profile_schema.json")
 SYSTEM_MESSAGE_PATH = Path(__file__).with_name("search_profile_system_message.md")
 USER_TEMPLATE_PATH = Path(__file__).with_name("search_profile_user_message_template.md")
+
+_STRENGTH_RANK = {
+    "exposure": 0,
+    "secondary": 1,
+    "strong": 2,
+    "core": 3,
+}
 
 
 def _clean_text(value: str) -> str:
@@ -54,13 +62,55 @@ def _normalize_taxonomy_name(value: str) -> str:
     return _clean_text(value).lower()
 
 
+def _clean_confidence_score(value: Any) -> float:
+    parsed_value = value
+    if isinstance(parsed_value, str):
+        normalized = _clean_text(parsed_value)
+        if not normalized:
+            raise ValueError("confidence must not be empty")
+        try:
+            parsed_value = float(normalized)
+        except ValueError as error:
+            raise ValueError("confidence must be a number between 0 and 1") from error
+
+    if not isinstance(parsed_value, (int, float)):
+        raise ValueError("confidence must be a number between 0 and 1")
+
+    confidence = float(parsed_value)
+    if confidence < 0 or confidence > 1:
+        raise ValueError("confidence must be between 0 and 1")
+    return round(confidence, 4)
+
+
+def _merge_evidence(*groups: Iterable[str]) -> List[str]:
+    merged: List[str] = []
+    for group in groups:
+        merged.extend(group)
+    return _dedupe_and_strip(merged)
+
+
 def compute_source_text_hash(profile_text: str) -> str:
     return hashlib.sha256(profile_text.encode("utf-8")).hexdigest()
 
 
-class SearchProfileNamedStrengthItem(BaseModel):
+class SearchProfileEvidenceBackedItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    confidence: float
+    evidence: List[str]
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def clean_confidence(cls, value: Any) -> float:
+        return _clean_confidence_score(value)
+
+    @field_validator("evidence", mode="after")
+    @classmethod
+    def clean_evidence(cls, values: List[str]) -> List[str]:
+        return _dedupe_and_strip(values)
+
+
+class SearchProfileFeatureItem(SearchProfileEvidenceBackedItem):
     name: str
     strength: Literal["core", "strong", "secondary", "exposure"]
 
@@ -72,10 +122,14 @@ class SearchProfileNamedStrengthItem(BaseModel):
             raise ValueError("name must not be empty")
         return normalized
 
+    @model_validator(mode="after")
+    def validate_item(self) -> "SearchProfileFeatureItem":
+        if not self.evidence:
+            raise ValueError("evidence must not be empty for extracted feature items")
+        return self
 
-class SearchProfileLanguageItem(BaseModel):
-    model_config = ConfigDict(extra="forbid")
 
+class SearchProfileLanguageItem(SearchProfileEvidenceBackedItem):
     name: str
     level: Optional[
         Literal[
@@ -105,10 +159,52 @@ class SearchProfileLanguageItem(BaseModel):
         normalized = _normalize_taxonomy_name(value)
         return normalized or None
 
+    @model_validator(mode="after")
+    def validate_item(self) -> "SearchProfileLanguageItem":
+        if not self.evidence:
+            raise ValueError("evidence must not be empty for extracted language items")
+        return self
 
-class SearchProfileCandidateConstraints(BaseModel):
-    model_config = ConfigDict(extra="forbid")
 
+class SearchProfileSeniorityItem(SearchProfileEvidenceBackedItem):
+    value: Optional[Literal["junior", "medior", "senior", "lead", "principal", "staff"]]
+
+    @field_validator("value", mode="before")
+    @classmethod
+    def clean_value(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+
+        normalized = _normalize_taxonomy_name(value)
+        return normalized or None
+
+    @model_validator(mode="after")
+    def validate_item(self) -> "SearchProfileSeniorityItem":
+        if self.value is not None and not self.evidence:
+            raise ValueError("evidence must not be empty when seniority has a value")
+        return self
+
+
+class SearchProfileYearsExperienceItem(SearchProfileEvidenceBackedItem):
+    value: Optional[int]
+
+    @field_validator("value")
+    @classmethod
+    def validate_value(cls, value: Optional[int]) -> Optional[int]:
+        if value is not None and value < 0:
+            raise ValueError("years_experience_total.value must be >= 0")
+        return value
+
+    @model_validator(mode="after")
+    def validate_item(self) -> "SearchProfileYearsExperienceItem":
+        if self.value is not None and not self.evidence:
+            raise ValueError(
+                "evidence must not be empty when years_experience_total has a value"
+            )
+        return self
+
+
+class SearchProfileCandidateConstraints(SearchProfileEvidenceBackedItem):
     preferred_locations: List[str]
     excluded_locations: List[str]
     preferred_workplace_types: List[str]
@@ -129,92 +225,93 @@ class SearchProfileCandidateConstraints(BaseModel):
     def clean_list_fields(cls, values: List[str]) -> List[str]:
         return _dedupe_and_strip(values)
 
-
-class SearchProfileEvidence(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    skills: List[str]
-    languages: List[str]
-    protocols: List[str]
-    standards: List[str]
-    domains: List[str]
-    seniority_hint: List[str]
-    years_experience_total: List[str]
-    candidate_constraints: List[str]
-
-    @field_validator("*", mode="after")
-    @classmethod
-    def clean_evidence_lists(cls, values: List[str]) -> List[str]:
-        return _dedupe_and_strip(values)
+    @model_validator(mode="after")
+    def validate_item(self) -> "SearchProfileCandidateConstraints":
+        has_constraints = any(
+            (
+                self.preferred_locations,
+                self.excluded_locations,
+                self.preferred_workplace_types,
+                self.excluded_workplace_types,
+                self.requires_visa_sponsorship is not None,
+                self.avoid_export_control_roles is not None,
+                self.notes,
+            )
+        )
+        if has_constraints and not self.evidence:
+            raise ValueError("evidence must not be empty when candidate_constraints are set")
+        return self
 
 
 class SearchProfilePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    skills: List[SearchProfileNamedStrengthItem]
+    skills: List[SearchProfileFeatureItem]
     languages: List[SearchProfileLanguageItem]
-    protocols: List[SearchProfileNamedStrengthItem]
-    standards: List[SearchProfileNamedStrengthItem]
-    domains: List[SearchProfileNamedStrengthItem]
-    seniority_hint: Optional[
-        Literal["junior", "medior", "senior", "lead", "principal", "staff"]
-    ]
-    years_experience_total: Optional[int]
+    protocols: List[SearchProfileFeatureItem]
+    standards: List[SearchProfileFeatureItem]
+    domains: List[SearchProfileFeatureItem]
+    seniority: SearchProfileSeniorityItem
+    years_experience_total: SearchProfileYearsExperienceItem
     candidate_constraints: SearchProfileCandidateConstraints
-    evidence: SearchProfileEvidence
 
-    @field_validator("seniority_hint", mode="before")
+    @field_validator("skills", "protocols", "standards", "domains", mode="after")
     @classmethod
-    def clean_seniority_hint(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return None
+    def dedupe_feature_items(
+        cls,
+        values: List[SearchProfileFeatureItem],
+    ) -> List[SearchProfileFeatureItem]:
+        deduped: dict[str, SearchProfileFeatureItem] = {}
 
-        normalized = _normalize_taxonomy_name(value)
-        return normalized or None
+        for value in values:
+            existing = deduped.get(value.name)
+            if existing is None:
+                deduped[value.name] = value
+                continue
 
-    @field_validator("years_experience_total")
-    @classmethod
-    def validate_years_experience_total(cls, value: Optional[int]) -> Optional[int]:
-        if value is not None and value < 0:
-            raise ValueError("years_experience_total must be >= 0")
-        return value
-
-    @model_validator(mode="after")
-    def validate_evidence_alignment(self) -> "SearchProfilePayload":
-        if self.skills and not self.evidence.skills:
-            raise ValueError("missing evidence for 'skills'")
-        if self.languages and not self.evidence.languages:
-            raise ValueError("missing evidence for 'languages'")
-        if self.protocols and not self.evidence.protocols:
-            raise ValueError("missing evidence for 'protocols'")
-        if self.standards and not self.evidence.standards:
-            raise ValueError("missing evidence for 'standards'")
-        if self.domains and not self.evidence.domains:
-            raise ValueError("missing evidence for 'domains'")
-        if self.seniority_hint is not None and not self.evidence.seniority_hint:
-            raise ValueError("missing evidence for 'seniority_hint'")
-        if (
-            self.years_experience_total is not None
-            and not self.evidence.years_experience_total
-        ):
-            raise ValueError("missing evidence for 'years_experience_total'")
-
-        constraints = self.candidate_constraints
-        has_constraints = any(
-            (
-                constraints.preferred_locations,
-                constraints.excluded_locations,
-                constraints.preferred_workplace_types,
-                constraints.excluded_workplace_types,
-                constraints.requires_visa_sponsorship is not None,
-                constraints.avoid_export_control_roles is not None,
-                constraints.notes,
+            best_strength = (
+                value.strength
+                if _STRENGTH_RANK[value.strength] > _STRENGTH_RANK[existing.strength]
+                else existing.strength
             )
-        )
-        if has_constraints and not self.evidence.candidate_constraints:
-            raise ValueError("missing evidence for 'candidate_constraints'")
+            deduped[value.name] = SearchProfileFeatureItem(
+                name=existing.name,
+                strength=best_strength,
+                confidence=max(existing.confidence, value.confidence),
+                evidence=_merge_evidence(existing.evidence, value.evidence),
+            )
 
-        return self
+        return list(deduped.values())
+
+    @field_validator("languages", mode="after")
+    @classmethod
+    def dedupe_language_items(
+        cls,
+        values: List[SearchProfileLanguageItem],
+    ) -> List[SearchProfileLanguageItem]:
+        deduped: dict[str, SearchProfileLanguageItem] = {}
+
+        for value in values:
+            existing = deduped.get(value.name)
+            if existing is None:
+                deduped[value.name] = value
+                continue
+
+            if value.confidence > existing.confidence:
+                preferred_level = value.level or existing.level
+            elif existing.confidence > value.confidence:
+                preferred_level = existing.level or value.level
+            else:
+                preferred_level = existing.level or value.level
+
+            deduped[value.name] = SearchProfileLanguageItem(
+                name=existing.name,
+                level=preferred_level,
+                confidence=max(existing.confidence, value.confidence),
+                evidence=_merge_evidence(existing.evidence, value.evidence),
+            )
+
+        return list(deduped.values())
 
 
 class SearchProfileDocument(BaseModel):
@@ -309,6 +406,7 @@ class SearchProfileExtractor:
         client: OpenAI,
         model: str = DEFAULT_SEARCH_PROFILE_LLM_MODEL,
         timeout_seconds: float = 60.0,
+        max_completion_tokens: int = DEFAULT_SEARCH_PROFILE_MAX_COMPLETION_TOKENS,
     ) -> None:
         self._extractor = OpenAIStructuredExtractor(
             client=client,
@@ -318,6 +416,7 @@ class SearchProfileExtractor:
             render_user_message=_render_user_message,
             operation_name="Search profile extraction",
             timeout_seconds=timeout_seconds,
+            max_completion_tokens=max_completion_tokens,
         )
 
     @classmethod
@@ -330,9 +429,16 @@ class SearchProfileExtractor:
             "SEARCH_PROFILE_LLM_MODEL",
             DEFAULT_SEARCH_PROFILE_LLM_MODEL,
         )
+        max_completion_tokens = int(
+            os.environ.get(
+                "SEARCH_PROFILE_LLM_MAX_COMPLETION_TOKENS",
+                str(DEFAULT_SEARCH_PROFILE_MAX_COMPLETION_TOKENS),
+            )
+        )
         return cls(
             client=OpenAI(api_key=api_key),
             model=model,
+            max_completion_tokens=max_completion_tokens,
         )
 
     def extract(
@@ -374,11 +480,13 @@ def extract_profile(
 
 __all__ = [
     "DEFAULT_SEARCH_PROFILE_LLM_MODEL",
+    "DEFAULT_SEARCH_PROFILE_MAX_COMPLETION_TOKENS",
     "SEARCH_PROFILE_SCHEMA_VERSION",
-    "SearchProfileNamedStrengthItem",
+    "SearchProfileFeatureItem",
     "SearchProfileLanguageItem",
+    "SearchProfileSeniorityItem",
+    "SearchProfileYearsExperienceItem",
     "SearchProfileCandidateConstraints",
-    "SearchProfileEvidence",
     "SearchProfilePayload",
     "SearchProfileDocument",
     "SearchProfileExtractor",
