@@ -9,6 +9,7 @@ from infra import json_io
 
 DEFAULT_COMPANY_SLUG = "sioux"
 BASE_OUTPUT_DIR = Path("data/job_profiles")
+BASE_RANKING_OUTPUT_DIR = Path("data/rankings")
 
 
 def output_dir_for(company_slug: str) -> Path:
@@ -36,6 +37,7 @@ RAW_OUTPUT_DIR = raw_output_dir_for(DEFAULT_COMPANY_SLUG)
 EVALUATED_OUTPUT_DIR = evaluated_output_dir_for(DEFAULT_COMPANY_SLUG)
 MATCH_OUTPUT_DIR = match_output_dir_for(DEFAULT_COMPANY_SLUG)
 VALIDATION_OUTPUT_PATH = validation_output_path_for(DEFAULT_COMPANY_SLUG)
+RANKING_OUTPUT_DIR = BASE_RANKING_OUTPUT_DIR
 
 
 def slugify_job_title(title: str | None) -> str:
@@ -72,12 +74,35 @@ def match_job_output_path_for(
     return match_output_dir_for(company_slug) / job_profile_filename(title, url)
 
 
+def ranking_result_filename(candidate_id: str | None, job_id: str | None) -> str:
+    normalized_candidate_id = str(candidate_id or "").strip()
+    normalized_job_id = str(job_id or "").strip()
+    if not normalized_candidate_id:
+        raise ValueError("candidate_id is required for ranking output")
+    if not normalized_job_id:
+        raise ValueError("job_id is required for ranking output")
+    return f"{normalized_candidate_id}_{normalized_job_id}.json"
+
+
+def ranking_output_path_for(candidate_id: str | None, job_id: str | None) -> Path:
+    return BASE_RANKING_OUTPUT_DIR / ranking_result_filename(candidate_id, job_id)
+
+
 def _job_identity(payload: dict[str, Any]) -> tuple[str | None, str | None]:
     title = payload.get("title")
     url = payload.get("url")
     return (
         str(title) if title is not None else None,
         str(url) if url is not None else None,
+    )
+
+
+def _ranking_identity(payload: dict[str, Any]) -> tuple[str | None, str | None]:
+    candidate_id = payload.get("candidate_id")
+    job_id = payload.get("job_id")
+    return (
+        str(candidate_id) if candidate_id is not None else None,
+        str(job_id) if job_id is not None else None,
     )
 
 
@@ -149,3 +174,16 @@ def write_match_job(
         path_builder=match_job_output_path_for,
         log_message=log_message,
     )
+
+
+def write_ranking_result(
+    ranking_payload: dict[str, Any],
+    *,
+    log_message: Callable[[str], None] | None = None,
+) -> Path:
+    candidate_id, job_id = _ranking_identity(ranking_payload)
+    output_path = ranking_output_path_for(candidate_id, job_id)
+    json_io.write_json(output_path, ranking_payload)
+    if log_message is not None:
+        log_message(f"wrote file: {output_path}")
+    return output_path

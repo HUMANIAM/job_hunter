@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from contextlib import contextmanager
 from dataclasses import dataclass
-from types import ModuleType
+from pathlib import Path
+from types import ModuleType, SimpleNamespace
 import sys
 
 if "playwright.sync_api" not in sys.modules:
@@ -19,34 +21,43 @@ if "playwright.sync_api" not in sys.modules:
     sys.modules["playwright"] = playwright
     sys.modules["playwright.sync_api"] = sync_api
 
-import fetch_jobs
+from app import job_hunter
 from sources.base import SourceDefinition, SourceRetrievalResult
 
 
 def test_parse_args_accepts_company_option() -> None:
-    args = fetch_jobs.parse_args(["--company", "sioux"])
+    args = job_hunter.parse_args(["--company", "sioux"])
 
     assert args.company == "sioux"
 
 
 def test_parse_args_defaults_to_optional_outputs_disabled() -> None:
-    args = fetch_jobs.parse_args([])
+    args = job_hunter.parse_args([])
 
     assert args.company == "sioux"
+    assert args.candidate_profile == job_hunter.DEFAULT_CANDIDATE_PROFILE_PATH
     assert args.job_limit is None
     assert args.write_raw is False
     assert args.write_evaluated is False
     assert args.write_validation is False
 
 
+def test_parse_args_accepts_candidate_profile_option() -> None:
+    args = job_hunter.parse_args(
+        ["--candidate-profile", "data/candidate_profiles/custom.json"]
+    )
+
+    assert args.candidate_profile == Path("data/candidate_profiles/custom.json")
+
+
 def test_parse_args_accepts_job_limit_option() -> None:
-    args = fetch_jobs.parse_args(["--job-limit", "1"])
+    args = job_hunter.parse_args(["--job-limit", "1"])
 
     assert args.job_limit == 1
 
 
 def test_parse_args_accepts_optional_output_flags() -> None:
-    args = fetch_jobs.parse_args(
+    args = job_hunter.parse_args(
         [
             "--company",
             "sioux",
@@ -154,7 +165,97 @@ class FakeBrowser:
         return self.context
 
 
-def test_fetch_source_jobs_writes_only_match_by_default(monkeypatch) -> None:
+def _fake_candidate_profile() -> SimpleNamespace:
+    return SimpleNamespace(candidate_id="Ibrahim_Saad_CV", profile=object())
+
+
+def _fake_ranking_result(
+    job: FakeJob,
+    *,
+    score: float = 0.91,
+    candidate_id: str = "Ibrahim_Saad_CV",
+) -> dict[str, object]:
+    return {
+        "job_id": job.job_id,
+        "candidate_id": candidate_id,
+        "score": score,
+        "bucket_scores": {
+            "skills": score,
+            "languages": 0.8,
+            "protocols": 0.7,
+            "standards": 0.0,
+            "domains": 0.6,
+            "seniority": 0.9,
+            "years_experience": 0.8,
+        },
+        "matched_features": [],
+        "missing_features": [],
+    }
+
+
+def _patch_ranker(monkeypatch, *, messages: list[str] | None = None) -> None:
+    def fake_rank_jobs(candidate_profile, jobs, *, log_message):
+        if messages is not None and jobs:
+            log_message(
+                "RANK [1] 'Controls Engineer' | score=0.910 | "
+                "skills=0.910 | languages=0.800 | protocols=0.700 | "
+                "standards=0.000 | domains=0.600 | seniority=0.900 | "
+                "years_experience=0.800"
+            )
+        return SimpleNamespace(
+            results=[_fake_ranking_result(job) for job in jobs],
+            ranked_jobs=list(jobs),
+        )
+
+    monkeypatch.setattr(job_hunter, "rank_jobs", fake_rank_jobs)
+
+
+def test_load_candidate_profile_backfills_candidate_id_from_filename(tmp_path: Path) -> None:
+    candidate_profile_path = tmp_path / "Ibrahim_Saad_CV.json"
+    candidate_profile_path.write_text(
+        json.dumps(
+            {
+                "source_text_hash": "3a01ac116f682c78fdd0704ed2774349959633d1a81647b79ecd1c396f6443d1",
+                "schema_version": "2.0.0",
+                "profile": {
+                    "skills": [],
+                    "languages": [],
+                    "protocols": [],
+                    "standards": [],
+                    "domains": [],
+                    "seniority": {
+                        "value": None,
+                        "confidence": 0.0,
+                        "evidence": [],
+                    },
+                    "years_experience_total": {
+                        "value": None,
+                        "confidence": 0.0,
+                        "evidence": [],
+                    },
+                    "candidate_constraints": {
+                        "preferred_locations": [],
+                        "excluded_locations": [],
+                        "preferred_workplace_types": [],
+                        "excluded_workplace_types": [],
+                        "requires_visa_sponsorship": None,
+                        "avoid_export_control_roles": None,
+                        "notes": [],
+                        "confidence": 0.0,
+                        "evidence": [],
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    candidate_profile = job_hunter.load_candidate_profile(candidate_profile_path)
+
+    assert candidate_profile.candidate_id == "Ibrahim_Saad_CV"
+
+
+def test_fetch_source_jobs_writes_rankings_by_default(monkeypatch) -> None:
     validation_report = {"facet_union_count": 2, "pagination_count": 2}
     retrieval = SourceRetrievalResult(
         job_links=[
@@ -181,71 +282,74 @@ def test_fetch_source_jobs_writes_only_match_by_default(monkeypatch) -> None:
     validation_writes: list[tuple[dict[str, object], str, object]] = []
     raw_writes: list[tuple[dict[str, object], str, object]] = []
     evaluated_writes: list[tuple[dict[str, object], str, object]] = []
-    match_writes: list[tuple[dict[str, object], str, object]] = []
+    ranking_writes: list[tuple[dict[str, object], object]] = []
 
-    monkeypatch.setattr(fetch_jobs, "log", messages.append)
+    monkeypatch.setattr(job_hunter, "log", messages.append)
+    _patch_ranker(monkeypatch, messages=messages)
     monkeypatch.setattr(
-        fetch_jobs.report_writer,
+        job_hunter.report_writer,
         "write_validation_report",
         lambda report, *, company_slug, log_message: validation_writes.append(
             (report, company_slug, log_message)
         ),
     )
     monkeypatch.setattr(
-        fetch_jobs.report_writer,
+        job_hunter.report_writer,
         "write_raw_job",
         lambda payload, *, company_slug, log_message: raw_writes.append(
             (payload, company_slug, log_message)
         ),
     )
     monkeypatch.setattr(
-        fetch_jobs.report_writer,
+        job_hunter.report_writer,
         "write_evaluated_job",
         lambda payload, *, company_slug, log_message: evaluated_writes.append(
             (payload, company_slug, log_message)
         ),
     )
     monkeypatch.setattr(
-        fetch_jobs.report_writer,
-        "write_match_job",
-        lambda payload, *, company_slug, log_message: match_writes.append(
-            (payload, company_slug, log_message)
-        ),
+        job_hunter.report_writer,
+        "write_ranking_result",
+        lambda payload, *, log_message: ranking_writes.append((payload, log_message)),
     )
 
-    result = fetch_jobs.fetch_source_jobs(browser, source)
+    result = job_hunter.fetch_source_jobs(
+        browser,
+        source,
+        candidate_profile=_fake_candidate_profile(),
+    )
 
     assert [job.url for job in result.jobs] == ["https://example.com/jobs/controls"]
-    assert [job.url for job in result.matched_jobs] == [
+    assert [job.url for job in result.ranked_jobs] == [
         "https://example.com/jobs/controls"
     ]
+    assert result.ranking_results[0]["job_id"] == "controls_engineer__test123456"
+    assert result.ranking_results[0]["candidate_id"] == "Ibrahim_Saad_CV"
     assert adapter.retrieve_job_limits == [None]
     assert adapter.logged_reports == [validation_report]
     assert validation_writes == []
     assert raw_writes == []
     assert evaluated_writes == []
-    assert len(match_writes) == 1
-    assert match_writes[0][0]["job_id"] == "controls_engineer__test123456"
-    assert match_writes[0][0]["url"] == "https://example.com/jobs/controls"
+    assert len(ranking_writes) == 1
+    assert ranking_writes[0][0]["job_id"] == "controls_engineer__test123456"
+    assert ranking_writes[0][0]["candidate_id"] == "Ibrahim_Saad_CV"
     assert parser.calls == [
         (
             browser.context.page,
             "https://example.com/jobs/controls",
             ["Control"],
-            fetch_jobs.log,
+            job_hunter.log,
         ),
         (
             browser.context.page,
             "https://example.com/jobs/skip",
             [],
-            fetch_jobs.log,
+            job_hunter.log,
         ),
     ]
     assert browser.context.closed is True
-    assert messages[0:2] == [
-        "fetch progress: [1/2]",
-        "KEEP [1] 'Controls Engineer' | reason=title_keep_match | title_hits=['controls'] | description_hits=[]",
-    ]
+    assert messages[:2] == ["fetch progress: [1/2]", "fetch progress: [2/2]"]
+    assert any(message.startswith("RANK [1] 'Controls Engineer' | score=0.910") for message in messages)
     assert messages[-1] == "closing browser after fetching 1 jobs"
 
 
@@ -266,27 +370,29 @@ def test_fetch_source_jobs_writes_requested_debug_artifacts(monkeypatch) -> None
     browser = FakeBrowser()
     raw_writes: list[dict[str, object]] = []
     evaluated_writes: list[dict[str, object]] = []
-    match_writes: list[dict[str, object]] = []
+    ranking_writes: list[dict[str, object]] = []
 
+    _patch_ranker(monkeypatch)
     monkeypatch.setattr(
-        fetch_jobs.report_writer,
+        job_hunter.report_writer,
         "write_raw_job",
         lambda payload, **_: raw_writes.append(payload),
     )
     monkeypatch.setattr(
-        fetch_jobs.report_writer,
+        job_hunter.report_writer,
         "write_evaluated_job",
         lambda payload, **_: evaluated_writes.append(payload),
     )
     monkeypatch.setattr(
-        fetch_jobs.report_writer,
-        "write_match_job",
-        lambda payload, **_: match_writes.append(payload),
+        job_hunter.report_writer,
+        "write_ranking_result",
+        lambda payload, **_: ranking_writes.append(payload),
     )
 
-    fetch_jobs.fetch_source_jobs(
+    job_hunter.fetch_source_jobs(
         browser,
         source,
+        candidate_profile=_fake_candidate_profile(),
         write_raw_jobs=True,
         write_evaluated_jobs=True,
     )
@@ -296,10 +402,10 @@ def test_fetch_source_jobs_writes_requested_debug_artifacts(monkeypatch) -> None
     assert raw_writes[0]["url"] == "https://example.com/jobs/controls"
     assert len(evaluated_writes) == 1
     assert evaluated_writes[0]["job_id"] == "controls_engineer__test123456"
-    assert evaluated_writes[0]["decision"] == "keep"
-    assert len(match_writes) == 1
-    assert match_writes[0]["job_id"] == "controls_engineer__test123456"
-    assert match_writes[0]["url"] == "https://example.com/jobs/controls"
+    assert evaluated_writes[0]["ranking"]["candidate_id"] == "Ibrahim_Saad_CV"
+    assert len(ranking_writes) == 1
+    assert ranking_writes[0]["job_id"] == "controls_engineer__test123456"
+    assert ranking_writes[0]["candidate_id"] == "Ibrahim_Saad_CV"
 
 
 def test_fetch_source_jobs_passes_job_limit_to_adapter(monkeypatch) -> None:
@@ -319,11 +425,19 @@ def test_fetch_source_jobs_passes_job_limit_to_adapter(monkeypatch) -> None:
     )
     browser = FakeBrowser()
 
+    _patch_ranker(monkeypatch)
     monkeypatch.setattr(
-        fetch_jobs.report_writer, "write_match_job", lambda *_args, **_kwargs: None
+        job_hunter.report_writer,
+        "write_ranking_result",
+        lambda *_args, **_kwargs: None,
     )
 
-    fetch_jobs.fetch_source_jobs(browser, source, job_limit=1)
+    job_hunter.fetch_source_jobs(
+        browser,
+        source,
+        candidate_profile=_fake_candidate_profile(),
+        job_limit=1,
+    )
 
     assert adapter.retrieve_job_limits == [1]
 
@@ -347,27 +461,26 @@ def test_fetch_source_jobs_continues_after_single_job_failure(monkeypatch) -> No
     )
     browser = FakeBrowser()
     messages: list[str] = []
-    match_writes: list[dict[str, object]] = []
+    ranking_writes: list[dict[str, object]] = []
 
-    monkeypatch.setattr(fetch_jobs, "log", messages.append)
+    monkeypatch.setattr(job_hunter, "log", messages.append)
+    _patch_ranker(monkeypatch)
     monkeypatch.setattr(
-        fetch_jobs.report_writer,
-        "write_match_job",
-        lambda payload, **_: match_writes.append(payload),
-    )
-    monkeypatch.setattr(
-        fetch_jobs.report_writer, "write_evaluated_job", lambda *_args, **_kwargs: None
-    )
-    monkeypatch.setattr(
-        fetch_jobs.report_writer, "write_raw_job", lambda *_args, **_kwargs: None
+        job_hunter.report_writer,
+        "write_ranking_result",
+        lambda payload, **_: ranking_writes.append(payload),
     )
 
-    result = fetch_jobs.fetch_source_jobs(browser, source)
+    result = job_hunter.fetch_source_jobs(
+        browser,
+        source,
+        candidate_profile=_fake_candidate_profile(),
+    )
 
     assert [job.url for job in result.jobs] == ["https://example.com/jobs/controls"]
-    assert len(match_writes) == 1
-    assert match_writes[0]["job_id"] == "controls_engineer__test123456"
-    assert match_writes[0]["url"] == "https://example.com/jobs/controls"
+    assert len(ranking_writes) == 1
+    assert ranking_writes[0]["job_id"] == "controls_engineer__test123456"
+    assert ranking_writes[0]["candidate_id"] == "Ibrahim_Saad_CV"
     assert any(
         "job failed: url='https://example.com/jobs/broken'" in message
         for message in messages
@@ -393,22 +506,29 @@ def test_fetch_source_jobs_writes_validation_when_enabled(monkeypatch) -> None:
     )
     validation_writes: list[tuple[dict[str, object], str, object]] = []
 
+    _patch_ranker(monkeypatch)
     monkeypatch.setattr(
-        fetch_jobs.report_writer,
+        job_hunter.report_writer,
         "write_validation_report",
         lambda report, *, company_slug, log_message: validation_writes.append(
             (report, company_slug, log_message)
         ),
     )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_ranking_result",
+        lambda *_args, **_kwargs: None,
+    )
 
-    fetch_jobs.fetch_source_jobs(
+    job_hunter.fetch_source_jobs(
         browser,
         source,
+        candidate_profile=_fake_candidate_profile(),
         write_validation_report=True,
     )
 
     assert adapter.logged_reports == [validation_report]
-    assert validation_writes == [(validation_report, "sioux", fetch_jobs.log)]
+    assert validation_writes == [(validation_report, "sioux", job_hunter.log)]
 
 
 @contextmanager
@@ -416,7 +536,7 @@ def _yield(value: object):
     yield value
 
 
-def test_main_writes_inline_job_states(monkeypatch) -> None:
+def test_main_loads_candidate_profile_and_logs_summary(monkeypatch) -> None:
     source = SourceDefinition(
         company_slug="sioux",
         source_url="https://example.com/jobs",
@@ -431,7 +551,8 @@ def test_main_writes_inline_job_states(monkeypatch) -> None:
         ),
         parser=FakeParser(),
     )
-    result = fetch_jobs.FetchSourceJobsResult(
+    candidate_profile = _fake_candidate_profile()
+    result = job_hunter.FetchSourceJobsResult(
         jobs=[
             FakeJob(
                 job_id="controls_engineer__test123456",
@@ -440,7 +561,17 @@ def test_main_writes_inline_job_states(monkeypatch) -> None:
                 url="https://example.com/jobs/controls",
             )
         ],
-        matched_jobs=[
+        ranking_results=[
+            _fake_ranking_result(
+                FakeJob(
+                    job_id="controls_engineer__test123456",
+                    title="Controls Engineer",
+                    description_text="Build control software.",
+                    url="https://example.com/jobs/controls",
+                )
+            )
+        ],
+        ranked_jobs=[
             FakeJob(
                 job_id="controls_engineer__test123456",
                 title="Controls Engineer",
@@ -449,30 +580,43 @@ def test_main_writes_inline_job_states(monkeypatch) -> None:
             )
         ],
     )
-    fetch_calls: list[bool] = []
+    fetch_kwargs: list[dict[str, object]] = []
     messages: list[str] = []
 
-    monkeypatch.setattr(fetch_jobs, "get_source", lambda company: source)
+    monkeypatch.setattr(job_hunter, "get_source", lambda company: source)
     monkeypatch.setattr(
-        fetch_jobs,
+        job_hunter,
+        "load_candidate_profile",
+        lambda path: candidate_profile,
+    )
+    monkeypatch.setattr(
+        job_hunter,
         "fetch_source_jobs",
         lambda browser, resolved_source, **kwargs: (
-            fetch_calls.append(kwargs["write_validation_report"]) or result
+            fetch_kwargs.append(kwargs) or result
         ),
     )
-    monkeypatch.setattr(fetch_jobs, "sync_playwright", lambda: _yield(object()))
+    monkeypatch.setattr(job_hunter, "sync_playwright", lambda: _yield(object()))
     monkeypatch.setattr(
-        fetch_jobs,
+        job_hunter,
         "launched_chromium",
         lambda playwright, *, headless=True: _yield(object()),
     )
-    monkeypatch.setattr(fetch_jobs, "log", messages.append)
+    monkeypatch.setattr(job_hunter, "log", messages.append)
 
-    fetch_jobs.main([])
+    job_hunter.main([])
 
-    assert fetch_calls == [False]
+    assert fetch_kwargs == [
+        {
+            "candidate_profile": candidate_profile,
+            "job_limit": None,
+            "write_raw_jobs": False,
+            "write_evaluated_jobs": False,
+            "write_validation_report": False,
+        }
+    ]
     assert messages[0] == "program started"
-    assert messages[-1] == "done: total_jobs=1 | relevant_jobs=1 | elapsed_seconds=0.00"
+    assert messages[-1] == "done: total_jobs=1 | ranked_jobs=1 | elapsed_seconds=0.00"
 
 
 def test_main_passes_validation_flag(monkeypatch) -> None:
@@ -490,26 +634,36 @@ def test_main_passes_validation_flag(monkeypatch) -> None:
         ),
         parser=FakeParser(),
     )
+    candidate_profile = _fake_candidate_profile()
     fetch_calls: list[bool] = []
 
-    monkeypatch.setattr(fetch_jobs, "get_source", lambda company: source)
+    monkeypatch.setattr(job_hunter, "get_source", lambda company: source)
     monkeypatch.setattr(
-        fetch_jobs,
+        job_hunter,
+        "load_candidate_profile",
+        lambda path: candidate_profile,
+    )
+    monkeypatch.setattr(
+        job_hunter,
         "fetch_source_jobs",
         lambda browser, resolved_source, **kwargs: (
             fetch_calls.append(kwargs["write_validation_report"])
-            or fetch_jobs.FetchSourceJobsResult(jobs=[], matched_jobs=[])
+            or job_hunter.FetchSourceJobsResult(
+                jobs=[],
+                ranking_results=[],
+                ranked_jobs=[],
+            )
         ),
     )
-    monkeypatch.setattr(fetch_jobs, "sync_playwright", lambda: _yield(object()))
+    monkeypatch.setattr(job_hunter, "sync_playwright", lambda: _yield(object()))
     monkeypatch.setattr(
-        fetch_jobs,
+        job_hunter,
         "launched_chromium",
         lambda playwright, *, headless=True: _yield(object()),
     )
-    monkeypatch.setattr(fetch_jobs, "log", lambda _message: None)
+    monkeypatch.setattr(job_hunter, "log", lambda _message: None)
 
-    fetch_jobs.main(["--write-validation"])
+    job_hunter.main(["--write-validation"])
 
     assert fetch_calls == [True]
 
@@ -529,29 +683,40 @@ def test_main_passes_debug_output_flags(monkeypatch) -> None:
         ),
         parser=FakeParser(),
     )
+    candidate_profile = _fake_candidate_profile()
     fetch_kwargs: list[dict[str, object]] = []
 
-    monkeypatch.setattr(fetch_jobs, "get_source", lambda company: source)
+    monkeypatch.setattr(job_hunter, "get_source", lambda company: source)
     monkeypatch.setattr(
-        fetch_jobs,
+        job_hunter,
+        "load_candidate_profile",
+        lambda path: candidate_profile,
+    )
+    monkeypatch.setattr(
+        job_hunter,
         "fetch_source_jobs",
         lambda browser, resolved_source, **kwargs: (
             fetch_kwargs.append(kwargs)
-            or fetch_jobs.FetchSourceJobsResult(jobs=[], matched_jobs=[])
+            or job_hunter.FetchSourceJobsResult(
+                jobs=[],
+                ranking_results=[],
+                ranked_jobs=[],
+            )
         ),
     )
-    monkeypatch.setattr(fetch_jobs, "sync_playwright", lambda: _yield(object()))
+    monkeypatch.setattr(job_hunter, "sync_playwright", lambda: _yield(object()))
     monkeypatch.setattr(
-        fetch_jobs,
+        job_hunter,
         "launched_chromium",
         lambda playwright, *, headless=True: _yield(object()),
     )
-    monkeypatch.setattr(fetch_jobs, "log", lambda _message: None)
+    monkeypatch.setattr(job_hunter, "log", lambda _message: None)
 
-    fetch_jobs.main(["--write-raw", "--write-evaluated"])
+    job_hunter.main(["--write-raw", "--write-evaluated"])
 
     assert fetch_kwargs == [
         {
+            "candidate_profile": candidate_profile,
             "job_limit": None,
             "write_raw_jobs": True,
             "write_evaluated_jobs": True,
@@ -575,29 +740,40 @@ def test_main_passes_job_limit_flag(monkeypatch) -> None:
         ),
         parser=FakeParser(),
     )
+    candidate_profile = _fake_candidate_profile()
     fetch_kwargs: list[dict[str, object]] = []
 
-    monkeypatch.setattr(fetch_jobs, "get_source", lambda company: source)
+    monkeypatch.setattr(job_hunter, "get_source", lambda company: source)
     monkeypatch.setattr(
-        fetch_jobs,
+        job_hunter,
+        "load_candidate_profile",
+        lambda path: candidate_profile,
+    )
+    monkeypatch.setattr(
+        job_hunter,
         "fetch_source_jobs",
         lambda browser, resolved_source, **kwargs: (
             fetch_kwargs.append(kwargs)
-            or fetch_jobs.FetchSourceJobsResult(jobs=[], matched_jobs=[])
+            or job_hunter.FetchSourceJobsResult(
+                jobs=[],
+                ranking_results=[],
+                ranked_jobs=[],
+            )
         ),
     )
-    monkeypatch.setattr(fetch_jobs, "sync_playwright", lambda: _yield(object()))
+    monkeypatch.setattr(job_hunter, "sync_playwright", lambda: _yield(object()))
     monkeypatch.setattr(
-        fetch_jobs,
+        job_hunter,
         "launched_chromium",
         lambda playwright, *, headless=True: _yield(object()),
     )
-    monkeypatch.setattr(fetch_jobs, "log", lambda _message: None)
+    monkeypatch.setattr(job_hunter, "log", lambda _message: None)
 
-    fetch_jobs.main(["--company", "sioux", "--job-limit", "1"])
+    job_hunter.main(["--company", "sioux", "--job-limit", "1"])
 
     assert fetch_kwargs == [
         {
+            "candidate_profile": candidate_profile,
             "job_limit": 1,
             "write_raw_jobs": False,
             "write_evaluated_jobs": False,

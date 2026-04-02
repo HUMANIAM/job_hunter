@@ -10,10 +10,9 @@ The project is currently in active experimentation with Sioux vacancies. The scr
 
 Today the project already includes:
 - a Playwright-based vacancy scraper
-- a final structured job output for the kept vacancies
+- per-job ranking results against a candidate profile
 - optional raw, evaluated, and validation JSON artifacts
 - a collection validation step that compares facet-based collection with unfiltered pagination collection
-- title and description based relevance filtering
 
 ## Local Development
 
@@ -34,27 +33,35 @@ Run the full test suite:
 Run a syntax check:
 
 ```bash
-.venv/bin/python -m py_compile fetch_jobs.py
+.venv/bin/python -m py_compile app/job_hunter.py
 ```
 
 ## Usage
 
-Fetch jobs for the default source (`sioux`) and write only the final per-job match artifacts:
+Run the single project entrypoint:
 
 ```bash
-.venv/bin/python fetch_jobs.py
+.venv/bin/python app/job_hunter.py
 ```
 
 Fetch a specific source:
 
 ```bash
-.venv/bin/python fetch_jobs.py --company sioux
+.venv/bin/python app/job_hunter.py --company sioux
+```
+
+Use a specific candidate profile:
+
+```bash
+.venv/bin/python app/job_hunter.py \
+  --company sioux \
+  --candidate-profile data/candidate_profiles/Ibrahim_Saad_CV.json
 ```
 
 Write all optional debug artifacts as well:
 
 ```bash
-.venv/bin/python fetch_jobs.py \
+.venv/bin/python app/job_hunter.py \
   --company sioux \
   --write-raw \
   --write-evaluated \
@@ -64,22 +71,23 @@ Write all optional debug artifacts as well:
 ### CLI Options
 
 - `--company <slug>`: source/company slug to fetch. Defaults to `sioux`.
+- `--candidate-profile <path>`: candidate profile JSON used for ranking.
 - `--write-raw`: write per-job raw collected job artifacts.
-- `--write-evaluated`: write per-job evaluated job artifacts with keep/skip metadata.
+- `--write-evaluated`: write per-job evaluated job artifacts with embedded ranking metadata.
 - `--write-validation`: write the collection validation artifact.
 
 ## Output Files
 
-All generated files are written under `data/job_profiles/<company>/`.
+Ranking files are written under `data/rankings/`.
 
-Default run:
+- `<candidate_id>_<job_id>.json`: one ranking result per extracted job.
 
-- `match/<job_title>__<url_hash>.json`: the final merged job payload for jobs that passed the evaluator.
+Additional source artifacts are written under `data/job_profiles/<company>/`.
 
 Optional files:
 
 - `raw/<job_title>__<url_hash>.json`: final merged job payload written as soon as extraction completes for a job.
-- `evaluated/<job_title>__<url_hash>.json`: the same job payload plus keep/skip evaluation metadata, written immediately after ranking.
+- `evaluated/<job_title>__<url_hash>.json`: the same job payload plus embedded ranking metadata, written immediately after ranking.
 - `jobs_<company>_validation.json`: collection validation report from the adapter.
 
 ## Repository Policy

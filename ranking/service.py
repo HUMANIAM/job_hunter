@@ -1,64 +1,50 @@
+# service.py
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, is_dataclass
+from dataclasses import asdict, dataclass
 from typing import Any, Callable, Sequence
 
-from ranking.evaluator import evaluate_job
+from ranking.evaluator import RankingResult, evaluate_job_match
 
 
 @dataclass
 class RankingBatchResult:
-    evaluated_jobs: list[dict[str, Any]]
-    kept_jobs: list[Any]
+    results: list[dict[str, Any]]
+    ranked_jobs: list[Any]
 
 
-def _serialize_job(job: Any) -> dict[str, Any]:
-    if is_dataclass(job):
-        return asdict(job)
-    if hasattr(job, "__dict__"):
-        return dict(vars(job))
-    raise TypeError(f"unsupported job type for ranking serialization: {type(job)!r}")
-
-
-def evaluate_jobs(
+def rank_jobs(
+    candidate_profile: Any,
     jobs: Sequence[Any],
     *,
     log_message: Callable[[str], None] | None = None,
 ) -> RankingBatchResult:
-    evaluated_jobs: list[dict[str, Any]] = []
-    kept_jobs: list[Any] = []
+    results: list[dict[str, Any]] = []
+    ranked: list[tuple[Any, RankingResult]] = []
 
     for idx, job in enumerate(jobs, start=1):
-        evaluation = evaluate_job(job)
+        ranking = evaluate_job_match(candidate_profile, job)
+        ranked.append((job, ranking))
 
         if log_message is not None:
-            if evaluation["decision"] == "keep":
-                log_message(
-                    f"KEEP [{idx}] '{job.title}' | "
-                    f"reason={evaluation['reason']} | "
-                    f"title_hits={evaluation['title_hits']} | "
-                    f"description_hits={evaluation['description_hits']}"
-                )
-            else:
-                log_message(
-                    f"SKIP [{idx}] '{job.title}' | "
-                    f"reason={evaluation['reason']} | "
-                    f"skip_hits={evaluation['skip_hits']} | "
-                    f"description_hits={evaluation['description_hits']}"
-                )
+            log_message(
+                f"RANK [{idx}] '{job.title}' | "
+                f"score={ranking.score:.3f} | "
+                f"skills={ranking.bucket_scores.skills:.3f} | "
+                f"languages={ranking.bucket_scores.languages:.3f} | "
+                f"protocols={ranking.bucket_scores.protocols:.3f} | "
+                f"standards={ranking.bucket_scores.standards:.3f} | "
+                f"domains={ranking.bucket_scores.domains:.3f} | "
+                f"seniority={ranking.bucket_scores.seniority:.3f} | "
+                f"years_experience={ranking.bucket_scores.years_experience:.3f}"
+            )
 
-        if evaluation["decision"] == "keep":
-            kept_jobs.append(job)
+    ranked.sort(key=lambda item: item[1].score, reverse=True)
 
-        job_dict = _serialize_job(job)
-        job_dict["decision"] = evaluation["decision"]
-        job_dict["reason"] = evaluation["reason"]
-        job_dict["skip_hits"] = evaluation["skip_hits"]
-        job_dict["title_hits"] = evaluation["title_hits"]
-        job_dict["description_hits"] = evaluation["description_hits"]
-        evaluated_jobs.append(job_dict)
+    for _, ranking in ranked:
+        results.append(asdict(ranking))
 
     return RankingBatchResult(
-        evaluated_jobs=evaluated_jobs,
-        kept_jobs=kept_jobs,
+        results=results,
+        ranked_jobs=[job for job, _ in ranked],
     )

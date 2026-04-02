@@ -11,6 +11,7 @@ def test_sioux_output_paths_use_job_profiles_directory() -> None:
     assert output_writer.RAW_OUTPUT_DIR == expected_dir / "raw"
     assert output_writer.EVALUATED_OUTPUT_DIR == expected_dir / "evaluated"
     assert output_writer.MATCH_OUTPUT_DIR == expected_dir / "match"
+    assert output_writer.RANKING_OUTPUT_DIR == Path("data/rankings")
     assert (
         output_writer.VALIDATION_OUTPUT_PATH
         == expected_dir / "jobs_sioux_validation.json"
@@ -38,6 +39,15 @@ def test_job_profile_filename_uses_slug_and_url_hash() -> None:
 
     assert filename.startswith("senior_software_engineer_c__")
     assert filename.endswith(".json")
+
+
+def test_ranking_result_filename_uses_candidate_and_job_ids() -> None:
+    filename = output_writer.ranking_result_filename(
+        "Ibrahim_Saad_CV",
+        "embedded_software_engineer__12345abcde",
+    )
+
+    assert filename == "Ibrahim_Saad_CV_embedded_software_engineer__12345abcde.json"
 
 
 def test_write_validation_report_uses_validation_output_path(
@@ -112,5 +122,38 @@ def test_write_match_job_writes_expected_payload(tmp_path: Path, monkeypatch) ->
     output_path = output_writer.write_match_job(payload)
 
     assert output_path.parent == tmp_path / "profiles" / "sioux" / "match"
+    with output_path.open("r", encoding="utf-8") as file_handle:
+        assert json.load(file_handle) == payload
+
+
+def test_write_ranking_result_writes_expected_payload(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(output_writer, "BASE_RANKING_OUTPUT_DIR", tmp_path / "rankings")
+
+    payload = {
+        "candidate_id": "Ibrahim_Saad_CV",
+        "job_id": "embedded_software_engineer__12345abcde",
+        "score": 0.84,
+        "bucket_scores": {
+            "skills": 0.9,
+            "languages": 0.8,
+            "protocols": 0.7,
+            "standards": 0.6,
+            "domains": 0.5,
+            "seniority": 1.0,
+            "years_experience": 0.9,
+        },
+        "matched_features": [],
+        "missing_features": [],
+    }
+    output_path = output_writer.write_ranking_result(payload)
+
+    assert output_path == (
+        tmp_path
+        / "rankings"
+        / "Ibrahim_Saad_CV_embedded_software_engineer__12345abcde.json"
+    )
     with output_path.open("r", encoding="utf-8") as file_handle:
         assert json.load(file_handle) == payload
