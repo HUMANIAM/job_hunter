@@ -1,124 +1,151 @@
+# evaluator.py
 from __future__ import annotations
 
-from dataclasses import dataclass
-import re
-from typing import Iterable, Protocol
+from dataclasses import dataclass, field
+from typing import Any, Iterable, Literal, Protocol
 
 
-class EvaluatableJob(Protocol):
-    title: str | None
-    description_text: str | None
-    languages: list[object] | None
-    required_languages: list[str] | None
-    restrictions: list[object] | None
-    years_experience_requirement: object | None
-    min_years_experience: int | None
+BucketName = Literal[
+    "skills",
+    "languages",
+    "protocols",
+    "standards",
+    "domains",
+    "seniority",
+    "years_experience",
+]
+
+
+STRENGTH_WEIGHTS: dict[str, float] = {
+    "core": 1.00,
+    "strong": 0.80,
+    "secondary": 0.55,
+    "exposure": 0.25,
+}
+
+REQUIREMENT_WEIGHTS: dict[str, float] = {
+    "required": 1.00,
+    "preferred": 0.60,
+}
+
+LANGUAGE_LEVEL_WEIGHTS: dict[str, float] = {
+    "native": 1.00,
+    "fluent": 0.90,
+    "professional": 0.75,
+    "conversational": 0.50,
+    "basic": 0.25,
+    "none": 0.00,
+}
+
+SENIORITY_WEIGHTS: dict[str, int] = {
+    "junior": 1,
+    "medior": 2,
+    "senior": 3,
+    "lead": 4,
+    "principal": 5,
+    "staff": 6,
+}
+
+BUCKET_WEIGHTS: dict[BucketName, float] = {
+    "skills": 0.40,
+    "languages": 0.10,
+    "protocols": 0.15,
+    "standards": 0.10,
+    "domains": 0.15,
+    "seniority": 0.05,
+    "years_experience": 0.05,
+}
+
+
+class FeatureLike(Protocol):
+    name: str
+    confidence: float
+
+
+class CandidateFeatureLike(FeatureLike, Protocol):
+    strength: str
+
+
+class CandidateLanguageLike(Protocol):
+    name: str
+    level: str | None
+    confidence: float
+
+
+class CandidateYearsExperienceLike(Protocol):
+    value: int | None
+    confidence: float
+
+
+class CandidateSeniorityLike(Protocol):
+    value: str | None
+    confidence: float
+
+
+class JobFeatureLike(FeatureLike, Protocol):
+    requirement_level: str
+
+
+class JobYearsExperienceLike(Protocol):
+    min_years: int | None
+    confidence: float
+
+
+class JobSeniorityLike(Protocol):
+    value: str | None
+    confidence: float
+
+
+class CandidateProfileRootLike(Protocol):
+    candidate_id: str
+    profile: Any
+
+
+class JobLike(Protocol):
+    job_id: str
+    title: str
+    skills: list[Any]
+    languages: list[Any]
+    protocols: list[Any]
+    standards: list[Any]
+    domains: list[Any]
+    seniority: Any
+    years_experience_requirement: Any
 
 
 @dataclass
-class HardFilterPolicy:
-    excluded_job_types: set[str]
-    excluded_required_languages: set[str]
-    require_export_control_clearance_absent: bool
-    max_min_years_experience: int | None
+class BucketScore:
+    skills: float
+    languages: float
+    protocols: float
+    standards: float
+    domains: float
+    seniority: float
+    years_experience: float
 
 
-DEFAULT_HARD_FILTER_POLICY = HardFilterPolicy(
-    excluded_job_types={"internship", "thesis", "graduation_assignment"},
-    excluded_required_languages={"dutch"},
-    require_export_control_clearance_absent=True,
-    max_min_years_experience=7,
-)
-
-EXCLUDED_JOB_TYPE_PATTERNS = {
-    "internship": re.compile(r"(?<![a-z0-9])internships?(?![a-z0-9])"),
-    "thesis": re.compile(r"(?<![a-z0-9])thesis(?![a-z0-9])"),
-    "graduation_assignment": re.compile(
-        r"(?<![a-z0-9])graduation assignments?(?![a-z0-9])"
-    ),
-}
-EXPORT_CONTROL_CLEARANCE_MARKERS = (
-    "export control",
-    "security clearance",
-)
+@dataclass
+class FeatureMatch:
+    bucket: BucketName
+    job_value: str
+    candidate_value: str
+    score: float
 
 
-KEEP_KEYWORDS = [
-    "c++",
-    "python",
-    "software engineer",
-    "software designer",
-    "embedded",
-    "firmware",
-    "control",
-    "controls",
-    "machine control",
-    "real-time",
-    "rtos",
-    "linux",
-    "system software",
-    "systems engineering",
-    "mechatronics software",
-    "automation",
-    "robotics",
-    "computer vision",
-    "algorithm",
-    "performance",
-    "high-tech",
-    "signal processing",
-    "image processing",
-    "ml",
-    "machine learning",
-    "inference",
-]
-
-LOW_SIGNAL_DESCRIPTION_KEYWORDS = {
-    "control",
-    "controls",
-    "performance",
-    "high-tech",
-}
+@dataclass
+class FeatureGap:
+    bucket: BucketName
+    job_value: str
 
 
-def compile_keyword_patterns(keywords: Iterable[str]) -> tuple[re.Pattern[str], ...]:
-    patterns: list[re.Pattern[str]] = []
-    for keyword in keywords:
-        escaped = re.escape(keyword.lower())
-        patterns.append(re.compile(rf"(?<![a-z0-9]){escaped}(?![a-z0-9])"))
-    return tuple(patterns)
-
-
-KEEP_PATTERNS = compile_keyword_patterns(KEEP_KEYWORDS)
-
-
-def matched_keywords(
-    text: str,
-    keywords: list[str],
-    patterns: Iterable[re.Pattern[str]],
-) -> list[str]:
-    normalized_text = text.lower()
-    return [
-        keyword
-        for keyword, pattern in zip(keywords, patterns)
-        if pattern.search(normalized_text)
-    ]
-
-
-def detect_job_types(title: str) -> list[str]:
-    normalized_title = title.lower()
-    return [
-        job_type
-        for job_type, pattern in EXCLUDED_JOB_TYPE_PATTERNS.items()
-        if pattern.search(normalized_title)
-    ]
-
-
-def has_export_control_or_clearance_restriction(restrictions: Iterable[str]) -> bool:
-    return any(
-        marker in restriction.lower()
-        for restriction in restrictions
-        for marker in EXPORT_CONTROL_CLEARANCE_MARKERS
-    )
+@dataclass
+class RankingResult:
+    job_id: str
+    candidate_id: str
+    score: float
+    bucket_scores: BucketScore
+    matched_features: list[FeatureMatch] = field(default_factory=list)
+    missing_features: list[FeatureGap] = field(default_factory=list)
 
 
 def _get_field(value: object, field_name: str) -> object | None:
@@ -127,155 +154,336 @@ def _get_field(value: object, field_name: str) -> object | None:
     return getattr(value, field_name, None)
 
 
-def _required_languages(job: EvaluatableJob) -> list[str]:
-    languages = getattr(job, "languages", None)
-    if languages is not None:
-        extracted_languages: list[str] = []
-        for language in languages:
-            if _get_field(language, "requirement_level") != "required":
-                continue
-            name = _get_field(language, "name")
-            if isinstance(name, str):
-                extracted_languages.append(name.lower())
-        return extracted_languages
-
-    return [
-        language.lower()
-        for language in (getattr(job, "required_languages", None) or [])
-    ]
+def _normalize_name(value: str | None) -> str:
+    return (value or "").strip().lower()
 
 
-def _restriction_values(job: EvaluatableJob) -> list[str]:
-    raw_restrictions = getattr(job, "restrictions", None) or []
-    values: list[str] = []
-    for restriction in raw_restrictions:
-        if isinstance(restriction, str):
-            values.append(restriction)
+def _safe_confidence(value: object) -> float:
+    if isinstance(value, (int, float)):
+        return max(0.0, min(1.0, float(value)))
+    return 0.0
+
+
+def _candidate_strength_weight(value: str | None) -> float:
+    return STRENGTH_WEIGHTS.get((value or "").strip().lower(), 0.0)
+
+
+def _job_requirement_weight(value: str | None) -> float:
+    return REQUIREMENT_WEIGHTS.get((value or "").strip().lower(), 0.0)
+
+
+def _language_level_weight(value: str | None) -> float:
+    return LANGUAGE_LEVEL_WEIGHTS.get((value or "").strip().lower(), 0.0)
+
+
+def _empty_bucket_scores() -> dict[BucketName, float]:
+    return {
+        "skills": 0.0,
+        "languages": 0.0,
+        "protocols": 0.0,
+        "standards": 0.0,
+        "domains": 0.0,
+        "seniority": 0.0,
+        "years_experience": 0.0,
+    }
+
+
+def _candidate_feature_index(items: Iterable[object]) -> dict[str, object]:
+    indexed: dict[str, object] = {}
+    for item in items:
+        name = _normalize_name(_get_field(item, "name"))
+        if not name:
             continue
 
-        value = _get_field(restriction, "value")
-        if isinstance(value, str):
-            values.append(value)
-    return values
+        current = indexed.get(name)
+        if current is None:
+            indexed[name] = item
+            continue
+
+        current_strength = _candidate_strength_weight(_get_field(current, "strength"))
+        current_confidence = _safe_confidence(_get_field(current, "confidence"))
+        new_strength = _candidate_strength_weight(_get_field(item, "strength"))
+        new_confidence = _safe_confidence(_get_field(item, "confidence"))
+
+        if (new_strength, new_confidence) > (current_strength, current_confidence):
+            indexed[name] = item
+
+    return indexed
 
 
-def _min_years_experience(job: EvaluatableJob) -> int | None:
-    years_requirement = getattr(job, "years_experience_requirement", None)
-    if years_requirement is not None:
-        min_years = _get_field(years_requirement, "min_years")
-        if isinstance(min_years, int) or min_years is None:
-            return min_years
+def _candidate_language_index(items: Iterable[object]) -> dict[str, object]:
+    indexed: dict[str, object] = {}
+    for item in items:
+        name = _normalize_name(_get_field(item, "name"))
+        if not name:
+            continue
 
-    legacy_value = getattr(job, "min_years_experience", None)
+        current = indexed.get(name)
+        if current is None:
+            indexed[name] = item
+            continue
+
+        current_level = _language_level_weight(_get_field(current, "level"))
+        current_confidence = _safe_confidence(_get_field(current, "confidence"))
+        new_level = _language_level_weight(_get_field(item, "level"))
+        new_confidence = _safe_confidence(_get_field(item, "confidence"))
+
+        if (new_level, new_confidence) > (current_level, current_confidence):
+            indexed[name] = item
+
+    return indexed
+
+
+def _score_feature_bucket(
+    *,
+    bucket: BucketName,
+    job_items: Iterable[object],
+    candidate_items: Iterable[object],
+) -> tuple[float, list[FeatureMatch], list[FeatureGap]]:
+    candidate_index = _candidate_feature_index(candidate_items)
+    numerator = 0.0
+    denominator = 0.0
+    matches: list[FeatureMatch] = []
+    gaps: list[FeatureGap] = []
+
+    for job_item in job_items:
+        job_name = _normalize_name(_get_field(job_item, "name"))
+        if not job_name:
+            continue
+
+        requirement_level = _get_field(job_item, "requirement_level")
+        job_importance = (
+            _job_requirement_weight(requirement_level)
+            * _safe_confidence(_get_field(job_item, "confidence"))
+        )
+        if job_importance <= 0:
+            continue
+
+        denominator += job_importance
+        candidate_item = candidate_index.get(job_name)
+        if candidate_item is None:
+            gaps.append(FeatureGap(bucket=bucket, job_value=job_name))
+            continue
+
+        candidate_quality = (
+            _candidate_strength_weight(_get_field(candidate_item, "strength"))
+            * _safe_confidence(_get_field(candidate_item, "confidence"))
+        )
+        contribution = job_importance * candidate_quality
+        numerator += contribution
+
+        matches.append(
+            FeatureMatch(
+                bucket=bucket,
+                job_value=job_name,
+                candidate_value=job_name,
+                score=round(candidate_quality, 6),
+            )
+        )
+
+    if denominator == 0:
+        return 0.0, matches, gaps
+
+    return numerator / denominator, matches, gaps
+
+
+def _score_language_bucket(
+    *,
+    job_items: Iterable[object],
+    candidate_items: Iterable[object],
+) -> tuple[float, list[FeatureMatch], list[FeatureGap]]:
+    candidate_index = _candidate_language_index(candidate_items)
+    numerator = 0.0
+    denominator = 0.0
+    matches: list[FeatureMatch] = []
+    gaps: list[FeatureGap] = []
+
+    for job_item in job_items:
+        job_name = _normalize_name(_get_field(job_item, "name"))
+        if not job_name:
+            continue
+
+        job_importance = (
+            _job_requirement_weight(_get_field(job_item, "requirement_level"))
+            * _safe_confidence(_get_field(job_item, "confidence"))
+        )
+        if job_importance <= 0:
+            continue
+
+        denominator += job_importance
+        candidate_item = candidate_index.get(job_name)
+        if candidate_item is None:
+            gaps.append(FeatureGap(bucket="languages", job_value=job_name))
+            continue
+
+        candidate_quality = (
+            _language_level_weight(_get_field(candidate_item, "level"))
+            * _safe_confidence(_get_field(candidate_item, "confidence"))
+        )
+        contribution = job_importance * candidate_quality
+        numerator += contribution
+
+        matches.append(
+            FeatureMatch(
+                bucket="languages",
+                job_value=job_name,
+                candidate_value=job_name,
+                score=round(candidate_quality, 6),
+            )
+        )
+
+    if denominator == 0:
+        return 0.0, matches, gaps
+
+    return numerator / denominator, matches, gaps
+
+
+def _score_seniority(
+    *,
+    job_seniority: object,
+    candidate_seniority: object,
+) -> tuple[float, list[FeatureMatch], list[FeatureGap]]:
+    job_value = _normalize_name(_get_field(job_seniority, "value"))
+    candidate_value = _normalize_name(_get_field(candidate_seniority, "value"))
+
+    if not job_value:
+        return 0.0, [], []
+
+    if candidate_value not in SENIORITY_WEIGHTS:
+        return 0.0, [], [FeatureGap(bucket="seniority", job_value=job_value)]
+
+    if job_value not in SENIORITY_WEIGHTS:
+        return 0.0, [], []
+
+    job_level = SENIORITY_WEIGHTS[job_value]
+    candidate_level = SENIORITY_WEIGHTS[candidate_value]
+
+    if candidate_level >= job_level:
+        level_score = 1.0
+    elif candidate_level == job_level - 1:
+        level_score = 0.5
+    else:
+        level_score = 0.0
+
+    score = (
+        level_score
+        * _safe_confidence(_get_field(job_seniority, "confidence"))
+        * _safe_confidence(_get_field(candidate_seniority, "confidence"))
+    )
+
+    if score <= 0.0:
+        return 0.0, [], [FeatureGap(bucket="seniority", job_value=job_value)]
+
     return (
-        legacy_value if isinstance(legacy_value, int) or legacy_value is None else None
+        score,
+        [
+            FeatureMatch(
+                bucket="seniority",
+                job_value=job_value,
+                candidate_value=candidate_value,
+                score=round(score, 6),
+            )
+        ],
+        [],
     )
 
 
-def evaluate_hard_filters(
-    job: EvaluatableJob,
-    policy: HardFilterPolicy = DEFAULT_HARD_FILTER_POLICY,
-) -> dict | None:
-    title = job.title or ""
-    matched_job_types = [
-        job_type
-        for job_type in detect_job_types(title)
-        if job_type in policy.excluded_job_types
-    ]
-    if matched_job_types:
-        return {
-            "decision": "skip",
-            "reason": "hard_filter_exclude_job_type",
-            "skip_hits": [f"job_type:{job_type}" for job_type in matched_job_types],
-            "title_hits": [],
-            "description_hits": [],
-        }
+def _score_years_experience(
+    *,
+    job_years_requirement: object,
+    candidate_years_experience: object,
+) -> tuple[float, list[FeatureMatch], list[FeatureGap]]:
+    min_years = _get_field(job_years_requirement, "min_years")
+    candidate_years = _get_field(candidate_years_experience, "value")
 
-    matched_languages = sorted(
-        set(_required_languages(job)) & policy.excluded_required_languages
+    if not isinstance(min_years, int) or min_years <= 0:
+        return 0.0, [], []
+
+    if not isinstance(candidate_years, int) or candidate_years < 0:
+        return 0.0, [], [FeatureGap(bucket="years_experience", job_value=str(min_years))]
+
+    ratio = min(candidate_years / min_years, 1.0)
+    score = (
+        ratio
+        * _safe_confidence(_get_field(job_years_requirement, "confidence"))
+        * _safe_confidence(_get_field(candidate_years_experience, "confidence"))
     )
-    if matched_languages:
-        return {
-            "decision": "skip",
-            "reason": "hard_filter_required_language",
-            "skip_hits": [
-                f"required_language:{language}" for language in matched_languages
-            ],
-            "title_hits": [],
-            "description_hits": [],
-        }
 
-    restrictions = _restriction_values(job)
-    if (
-        policy.require_export_control_clearance_absent
-        and has_export_control_or_clearance_restriction(restrictions)
-    ):
-        return {
-            "decision": "skip",
-            "reason": "hard_filter_export_control_clearance",
-            "skip_hits": ["restriction:export_control_or_security_clearance"],
-            "title_hits": [],
-            "description_hits": [],
-        }
-
-    min_years_experience = _min_years_experience(job)
-    if (
-        policy.max_min_years_experience is not None
-        and min_years_experience is not None
-        and min_years_experience > policy.max_min_years_experience
-    ):
-        return {
-            "decision": "skip",
-            "reason": "hard_filter_min_years_experience",
-            "skip_hits": [f"min_years_experience:{min_years_experience}"],
-            "title_hits": [],
-            "description_hits": [],
-        }
-
-    return None
+    return (
+        score,
+        [
+            FeatureMatch(
+                bucket="years_experience",
+                job_value=str(min_years),
+                candidate_value=str(candidate_years),
+                score=round(score, 6),
+            )
+        ],
+        [],
+    )
 
 
-def evaluate_job(
-    job: EvaluatableJob,
-    hard_filter_policy: HardFilterPolicy = DEFAULT_HARD_FILTER_POLICY,
-) -> dict:
-    title = job.title or ""
-    description = job.description_text or ""
+def evaluate_job_match(
+    candidate_profile: CandidateProfileRootLike,
+    job: JobLike,
+) -> RankingResult:
+    profile = candidate_profile.profile
 
-    hard_filter_evaluation = evaluate_hard_filters(job, hard_filter_policy)
-    if hard_filter_evaluation is not None:
-        return hard_filter_evaluation
+    bucket_scores = _empty_bucket_scores()
+    matched_features: list[FeatureMatch] = []
+    missing_features: list[FeatureGap] = []
 
-    title_hits = matched_keywords(title, KEEP_KEYWORDS, KEEP_PATTERNS)
-    if title_hits:
-        return {
-            "decision": "keep",
-            "reason": "title_keep_match",
-            "skip_hits": [],
-            "title_hits": title_hits,
-            "description_hits": [],
-        }
+    feature_buckets: tuple[tuple[BucketName, Iterable[object], Iterable[object]], ...] = (
+        ("skills", job.skills, getattr(profile, "skills", [])),
+        ("protocols", job.protocols, getattr(profile, "protocols", [])),
+        ("standards", job.standards, getattr(profile, "standards", [])),
+        ("domains", job.domains, getattr(profile, "domains", [])),
+    )
 
-    description_hits_all = matched_keywords(description, KEEP_KEYWORDS, KEEP_PATTERNS)
-    description_hits = [
-        keyword
-        for keyword in description_hits_all
-        if keyword not in LOW_SIGNAL_DESCRIPTION_KEYWORDS
-    ]
+    for bucket_name, job_items, candidate_items in feature_buckets:
+        bucket_score, matches, gaps = _score_feature_bucket(
+            bucket=bucket_name,
+            job_items=job_items,
+            candidate_items=candidate_items,
+        )
+        bucket_scores[bucket_name] = round(bucket_score, 6)
+        matched_features.extend(matches)
+        missing_features.extend(gaps)
 
-    if len(description_hits) >= 2:
-        return {
-            "decision": "keep",
-            "reason": "description_keep_match",
-            "skip_hits": [],
-            "title_hits": [],
-            "description_hits": description_hits,
-        }
+    language_score, language_matches, language_gaps = _score_language_bucket(
+        job_items=job.languages,
+        candidate_items=getattr(profile, "languages", []),
+    )
+    bucket_scores["languages"] = round(language_score, 6)
+    matched_features.extend(language_matches)
+    missing_features.extend(language_gaps)
 
-    return {
-        "decision": "skip",
-        "reason": "insufficient_keep_signal",
-        "skip_hits": [],
-        "title_hits": [],
-        "description_hits": description_hits,
-    }
+    seniority_score, seniority_matches, seniority_gaps = _score_seniority(
+        job_seniority=job.seniority,
+        candidate_seniority=getattr(profile, "seniority", None),
+    )
+    bucket_scores["seniority"] = round(seniority_score, 6)
+    matched_features.extend(seniority_matches)
+    missing_features.extend(seniority_gaps)
+
+    years_score, years_matches, years_gaps = _score_years_experience(
+        job_years_requirement=job.years_experience_requirement,
+        candidate_years_experience=getattr(profile, "years_experience_total", None),
+    )
+    bucket_scores["years_experience"] = round(years_score, 6)
+    matched_features.extend(years_matches)
+    missing_features.extend(years_gaps)
+
+    final_score = sum(
+        BUCKET_WEIGHTS[bucket] * bucket_scores[bucket]
+        for bucket in BUCKET_WEIGHTS
+    )
+
+    return RankingResult(
+        job_id=job.job_id,
+        candidate_id=candidate_profile.candidate_id,
+        score=round(final_score, 6),
+        bucket_scores=BucketScore(**bucket_scores),
+        matched_features=matched_features,
+        missing_features=missing_features,
+    )

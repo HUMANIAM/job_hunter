@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ranking/ranking_result.schema.json",
+  "title": "Ranking Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "job_id",
+    "candidate_id",
+    "score",
+    "bucket_scores",
+    "matched_features",
+    "missing_features"
+  ],
+  "properties": {
+    "job_id": {
+      "type": "string"
+    },
+    "candidate_id": {
+      "type": "string"
+    },
+    "score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "bucket_scores": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "skills",
+        "languages",
+        "protocols",
+        "standards",
+        "domains",
+        "seniority",
+        "years_experience"
+      ],
+      "properties": {
+        "skills": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "languages": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "protocols": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "standards": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "domains": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "seniority": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "years_experience": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "matched_features": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/featureMatch"
+      }
+    },
+    "missing_features": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/featureGap"
+      }
+    }
+  },
+  "$defs": {
+    "bucketName": {
+      "enum": [
+        "skills",
+        "languages",
+        "protocols",
+        "standards",
+        "domains",
+        "seniority",
+        "years_experience"
+      ]
+    },
+    "featureMatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bucket",
+        "job_value",
+        "candidate_value",
+        "score"
+      ],
+      "properties": {
+        "bucket": {
+          "$ref": "#/$defs/bucketName"
+        },
+        "job_value": {
+          "type": "string"
+        },
+        "candidate_value": {
+          "type": "string"
+        },
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "featureGap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bucket",
+        "job_value"
+      ],
+      "properties": {
+        "bucket": {
+          "$ref": "#/$defs/bucketName"
+        },
+        "job_value": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
