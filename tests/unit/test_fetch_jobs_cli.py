@@ -64,6 +64,7 @@ def test_parse_args_accepts_optional_output_flags() -> None:
 
 @dataclass
 class FakeJob:
+    job_id: str
     title: str | None
     description_text: str | None
     url: str
@@ -84,6 +85,7 @@ class FakeParser:
         if url.endswith("/skip"):
             return None
         return FakeJob(
+            job_id="controls_engineer__test123456",
             title="Controls Engineer",
             description_text="Build control software.",
             url=url,
@@ -102,6 +104,7 @@ class RaisingParser(FakeParser):
         if url.endswith("/broken"):
             raise RuntimeError("llm failed")
         return FakeJob(
+            job_id="controls_engineer__test123456",
             title="Controls Engineer",
             description_text="Build control software.",
             url=url,
@@ -222,6 +225,7 @@ def test_fetch_source_jobs_writes_only_match_by_default(monkeypatch) -> None:
     assert raw_writes == []
     assert evaluated_writes == []
     assert len(match_writes) == 1
+    assert match_writes[0][0]["job_id"] == "controls_engineer__test123456"
     assert match_writes[0][0]["url"] == "https://example.com/jobs/controls"
     assert parser.calls == [
         (
@@ -288,10 +292,13 @@ def test_fetch_source_jobs_writes_requested_debug_artifacts(monkeypatch) -> None
     )
 
     assert len(raw_writes) == 1
+    assert raw_writes[0]["job_id"] == "controls_engineer__test123456"
     assert raw_writes[0]["url"] == "https://example.com/jobs/controls"
     assert len(evaluated_writes) == 1
+    assert evaluated_writes[0]["job_id"] == "controls_engineer__test123456"
     assert evaluated_writes[0]["decision"] == "keep"
     assert len(match_writes) == 1
+    assert match_writes[0]["job_id"] == "controls_engineer__test123456"
     assert match_writes[0]["url"] == "https://example.com/jobs/controls"
 
 
@@ -359,6 +366,7 @@ def test_fetch_source_jobs_continues_after_single_job_failure(monkeypatch) -> No
 
     assert [job.url for job in result.jobs] == ["https://example.com/jobs/controls"]
     assert len(match_writes) == 1
+    assert match_writes[0]["job_id"] == "controls_engineer__test123456"
     assert match_writes[0]["url"] == "https://example.com/jobs/controls"
     assert any(
         "job failed: url='https://example.com/jobs/broken'" in message
@@ -426,6 +434,7 @@ def test_main_writes_inline_job_states(monkeypatch) -> None:
     result = fetch_jobs.FetchSourceJobsResult(
         jobs=[
             FakeJob(
+                job_id="controls_engineer__test123456",
                 title="Controls Engineer",
                 description_text="Build control software.",
                 url="https://example.com/jobs/controls",
@@ -433,6 +442,7 @@ def test_main_writes_inline_job_states(monkeypatch) -> None:
         ],
         matched_jobs=[
             FakeJob(
+                job_id="controls_engineer__test123456",
                 title="Controls Engineer",
                 description_text="Build control software.",
                 url="https://example.com/jobs/controls",

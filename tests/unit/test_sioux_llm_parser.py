@@ -241,6 +241,10 @@ def test_fetch_job_combines_deterministic_and_llm_fields() -> None:
         sioux_parser.fetch_job_deterministic = original_fetch
 
     assert job == sioux_parser.SiouxJob(
+        job_id=sioux_parser.compute_job_id(
+            "Embedded Software Engineer",
+            "https://vacancy.sioux.eu/vacancies/embedded-software-engineer.html",
+        ),
         title="Embedded Software Engineer",
         url="https://vacancy.sioux.eu/vacancies/embedded-software-engineer.html",
         disciplines=["Embedded", "Software"],

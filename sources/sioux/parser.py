@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass
@@ -83,6 +84,7 @@ class SiouxJobYearsExperienceRequirement:
 
 @dataclass
 class SiouxJob:
+    job_id: str
     title: str
     url: str
     disciplines: list[str]
@@ -202,6 +204,15 @@ CLIENT_SITE_MARKERS = (
 def _log(log_message: Callable[[str], None] | None, message: str) -> None:
     if log_message is not None:
         log_message(message)
+
+
+def compute_job_id(title: str | None, url: str | None) -> str:
+    stem = re.sub(r"[^a-z0-9]+", "_", (title or "").casefold()).strip("_") or "job"
+    if not url:
+        return stem
+
+    url_hash = hashlib.sha1(url.encode("utf-8")).hexdigest()[:10]
+    return f"{stem}__{url_hash}"
 
 
 def extract_job_tags(page: Page) -> dict[str, str]:
@@ -761,6 +772,10 @@ def _build_job(
     llm_payload: SiouxLlmExtractionPayload,
 ) -> SiouxJob:
     return SiouxJob(
+        job_id=compute_job_id(
+            deterministic_job.title,
+            deterministic_job.url,
+        ),
         title=deterministic_job.title,
         url=deterministic_job.url,
         disciplines=deterministic_job.disciplines,

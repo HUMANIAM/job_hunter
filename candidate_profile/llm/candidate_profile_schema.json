@@ -6,11 +6,15 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
+    "candidate_id",
     "source_text_hash",
     "schema_version",
     "profile"
   ],
   "properties": {
+    "candidate_id": {
+      "type": "string"
+    },
     "source_text_hash": {
       "type": "string"
     },
