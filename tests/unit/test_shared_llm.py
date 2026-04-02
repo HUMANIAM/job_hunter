@@ -52,6 +52,7 @@ def test_build_json_schema_example_renders_nested_schema_shapes() -> None:
         "properties": {
             "kind": {"$ref": "#/$defs/nullableKind"},
             "count": {"type": "integer"},
+            "confidence": {"type": "number"},
             "flags": {"type": "array", "items": {"type": "boolean"}},
             "nested": {
                 "type": "object",
@@ -65,6 +66,7 @@ def test_build_json_schema_example_renders_nested_schema_shapes() -> None:
     assert build_json_schema_example(root_schema, root_schema) == {
         "kind": "alpha | null",
         "count": 0,
+        "confidence": 0.0,
         "flags": [False],
         "nested": {
             "name": "string",

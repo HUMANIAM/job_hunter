@@ -96,6 +96,8 @@ def build_json_schema_example(
         return "string"
     if schema_type == "integer":
         return 0
+    if schema_type == "number":
+        return 0.0
     if schema_type == "boolean":
         return False
 
