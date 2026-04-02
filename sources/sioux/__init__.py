@@ -8,8 +8,16 @@ from sources.sioux import parser as sioux_parser
 
 
 class SiouxSourceAdapter:
-    def retrieve_job_links(self, browser: Any) -> SourceRetrievalResult:
-        retrieval = sioux_adapter.retrieve_sioux_job_links(browser)
+    def retrieve_job_links(
+        self,
+        browser: Any,
+        *,
+        job_limit: int | None = None,
+    ) -> SourceRetrievalResult:
+        retrieval = sioux_adapter.retrieve_sioux_job_links(
+            browser,
+            job_limit=job_limit,
+        )
         return SourceRetrievalResult(
             job_links=retrieval.job_links,
             discipline_map=retrieval.discipline_map,

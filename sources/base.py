@@ -12,7 +12,12 @@ class SourceRetrievalResult:
 
 
 class SourceAdapter(Protocol):
-    def retrieve_job_links(self, browser: Any) -> SourceRetrievalResult:
+    def retrieve_job_links(
+        self,
+        browser: Any,
+        *,
+        job_limit: int | None = None,
+    ) -> SourceRetrievalResult:
         ...
 
     def log_validation_report(self, report: dict[str, Any]) -> None:

@@ -82,7 +82,9 @@ def test_collect_job_links_via_facets_tracks_disciplines_per_url(monkeypatch) ->
         def new_context(self) -> FakeContext:
             return FakeContext()
 
-    monkeypatch.setattr(sioux_adapter, "wait_for_page_ready", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        sioux_adapter, "wait_for_page_ready", lambda *_args, **_kwargs: None
+    )
     monkeypatch.setattr(sioux_adapter, "click_if_visible", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(
         sioux_adapter,
@@ -95,7 +97,7 @@ def test_collect_job_links_via_facets_tracks_disciplines_per_url(monkeypatch) ->
     monkeypatch.setattr(
         sioux_adapter,
         "collect_links_for_facet",
-        lambda _browser, facet_name, _facet_url, _expected_count: {
+        lambda _browser, facet_name, _facet_url, _expected_count, *, job_limit=None: {
             "Software": {
                 "https://vacancy.sioux.eu/vacancies/shared.html",
                 "https://vacancy.sioux.eu/vacancies/software-only.html",
@@ -127,6 +129,64 @@ def test_collect_job_links_via_facets_tracks_disciplines_per_url(monkeypatch) ->
     ]
 
 
+def test_collect_job_links_via_facets_stops_at_job_limit(monkeypatch) -> None:
+    class FakePage:
+        url = sioux_adapter.START_URL
+
+        def goto(self, *_args, **_kwargs) -> None:
+            return None
+
+    class FakeContext:
+        def new_page(self) -> FakePage:
+            return FakePage()
+
+        def close(self) -> None:
+            return None
+
+    class FakeBrowser:
+        def new_context(self) -> FakeContext:
+            return FakeContext()
+
+    facet_calls: list[tuple[str, int | None]] = []
+
+    monkeypatch.setattr(
+        sioux_adapter, "wait_for_page_ready", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(sioux_adapter, "click_if_visible", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        sioux_adapter,
+        "extract_discipline_facets",
+        lambda _page: [
+            ("Software", "https://example.com/software", 3),
+            ("Electronics", "https://example.com/electronics", 4),
+        ],
+    )
+    monkeypatch.setattr(
+        sioux_adapter,
+        "collect_links_for_facet",
+        lambda _browser, facet_name, _facet_url, _expected_count, *, job_limit=None: (
+            facet_calls.append((facet_name, job_limit))
+            or {
+                "Software": {"https://vacancy.sioux.eu/vacancies/software-only.html"},
+                "Electronics": {
+                    "https://vacancy.sioux.eu/vacancies/electronics-only.html"
+                },
+            }[facet_name]
+        ),
+    )
+
+    job_links, discipline_map = sioux_adapter.collect_job_links_via_facets(
+        FakeBrowser(),
+        job_limit=1,
+    )
+
+    assert facet_calls == [("Software", 1)]
+    assert job_links == ["https://vacancy.sioux.eu/vacancies/software-only.html"]
+    assert discipline_map == {
+        "https://vacancy.sioux.eu/vacancies/software-only.html": ["Software"]
+    }
+
+
 def test_retrieve_sioux_job_links_returns_links_map_and_validation(
     monkeypatch,
 ) -> None:
@@ -144,16 +204,21 @@ def test_retrieve_sioux_job_links_returns_links_map_and_validation(
         "only_in_unfiltered_pagination": [],
         "sets_exactly_equal": True,
     }
+    collector_calls: list[tuple[str, int | None]] = []
 
     monkeypatch.setattr(
         sioux_adapter,
         "collect_job_links_via_facets",
-        lambda _browser: (facet_links, discipline_map),
+        lambda _browser, *, job_limit=None: (
+            collector_calls.append(("facet", job_limit)) or (facet_links, discipline_map)
+        ),
     )
     monkeypatch.setattr(
         sioux_adapter,
         "collect_job_links_via_unfiltered_pagination",
-        lambda _browser: list(facet_links),
+        lambda _browser, *, job_limit=None: (
+            collector_calls.append(("unfiltered", job_limit)) or list(facet_links)
+        ),
     )
     monkeypatch.setattr(
         sioux_adapter,
@@ -162,9 +227,10 @@ def test_retrieve_sioux_job_links_returns_links_map_and_validation(
     )
 
     # When: the adapter builds the consolidated retrieval result
-    retrieval = sioux_adapter.retrieve_sioux_job_links(object())
+    retrieval = sioux_adapter.retrieve_sioux_job_links(object(), job_limit=1)
 
     # Then: main can consume links, discipline mapping, and validation directly
+    assert collector_calls == [("facet", 1), ("unfiltered", 1)]
     assert retrieval.job_links == facet_links
     assert retrieval.discipline_map == discipline_map
     assert retrieval.validation_report == validation_report

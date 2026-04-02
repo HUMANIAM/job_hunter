@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from types import ModuleType, SimpleNamespace
+from types import ModuleType
 import sys
 
 if "playwright.sync_api" not in sys.modules:
@@ -33,9 +33,16 @@ def test_parse_args_defaults_to_optional_outputs_disabled() -> None:
     args = fetch_jobs.parse_args([])
 
     assert args.company == "sioux"
+    assert args.job_limit is None
     assert args.write_raw is False
     assert args.write_evaluated is False
     assert args.write_validation is False
+
+
+def test_parse_args_accepts_job_limit_option() -> None:
+    args = fetch_jobs.parse_args(["--job-limit", "1"])
+
+    assert args.job_limit == 1
 
 
 def test_parse_args_accepts_optional_output_flags() -> None:
@@ -105,8 +112,15 @@ class FakeAdapter:
     def __init__(self, retrieval: SourceRetrievalResult) -> None:
         self.retrieval = retrieval
         self.logged_reports: list[dict[str, object]] = []
+        self.retrieve_job_limits: list[int | None] = []
 
-    def retrieve_job_links(self, browser: object) -> SourceRetrievalResult:
+    def retrieve_job_links(
+        self,
+        browser: object,
+        *,
+        job_limit: int | None = None,
+    ) -> SourceRetrievalResult:
+        self.retrieve_job_limits.append(job_limit)
         return self.retrieval
 
     def log_validation_report(self, report: dict[str, object]) -> None:
@@ -202,6 +216,7 @@ def test_fetch_source_jobs_writes_only_match_by_default(monkeypatch) -> None:
     assert [job.url for job in result.matched_jobs] == [
         "https://example.com/jobs/controls"
     ]
+    assert adapter.retrieve_job_limits == [None]
     assert adapter.logged_reports == [validation_report]
     assert validation_writes == []
     assert raw_writes == []
@@ -280,6 +295,32 @@ def test_fetch_source_jobs_writes_requested_debug_artifacts(monkeypatch) -> None
     assert match_writes[0]["url"] == "https://example.com/jobs/controls"
 
 
+def test_fetch_source_jobs_passes_job_limit_to_adapter(monkeypatch) -> None:
+    retrieval = SourceRetrievalResult(
+        job_links=["https://example.com/jobs/controls"],
+        discipline_map={},
+        validation_report={},
+    )
+    adapter = FakeAdapter(retrieval)
+    source = SourceDefinition(
+        company_slug="sioux",
+        source_url="https://example.com/jobs",
+        configured_countries=("Netherlands",),
+        configured_languages=("en",),
+        adapter=adapter,
+        parser=FakeParser(),
+    )
+    browser = FakeBrowser()
+
+    monkeypatch.setattr(
+        fetch_jobs.report_writer, "write_match_job", lambda *_args, **_kwargs: None
+    )
+
+    fetch_jobs.fetch_source_jobs(browser, source, job_limit=1)
+
+    assert adapter.retrieve_job_limits == [1]
+
+
 def test_fetch_source_jobs_continues_after_single_job_failure(monkeypatch) -> None:
     retrieval = SourceRetrievalResult(
         job_links=[
@@ -307,15 +348,22 @@ def test_fetch_source_jobs_continues_after_single_job_failure(monkeypatch) -> No
         "write_match_job",
         lambda payload, **_: match_writes.append(payload),
     )
-    monkeypatch.setattr(fetch_jobs.report_writer, "write_evaluated_job", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(fetch_jobs.report_writer, "write_raw_job", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        fetch_jobs.report_writer, "write_evaluated_job", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        fetch_jobs.report_writer, "write_raw_job", lambda *_args, **_kwargs: None
+    )
 
     result = fetch_jobs.fetch_source_jobs(browser, source)
 
     assert [job.url for job in result.jobs] == ["https://example.com/jobs/controls"]
     assert len(match_writes) == 1
     assert match_writes[0]["url"] == "https://example.com/jobs/controls"
-    assert any("job failed: url='https://example.com/jobs/broken'" in message for message in messages)
+    assert any(
+        "job failed: url='https://example.com/jobs/broken'" in message
+        for message in messages
+    )
 
 
 def test_fetch_source_jobs_writes_validation_when_enabled(monkeypatch) -> None:
@@ -352,9 +400,7 @@ def test_fetch_source_jobs_writes_validation_when_enabled(monkeypatch) -> None:
     )
 
     assert adapter.logged_reports == [validation_report]
-    assert validation_writes == [
-        (validation_report, "sioux", fetch_jobs.log)
-    ]
+    assert validation_writes == [(validation_report, "sioux", fetch_jobs.log)]
 
 
 @contextmanager
@@ -473,7 +519,7 @@ def test_main_passes_debug_output_flags(monkeypatch) -> None:
         ),
         parser=FakeParser(),
     )
-    fetch_kwargs: list[dict[str, bool]] = []
+    fetch_kwargs: list[dict[str, object]] = []
 
     monkeypatch.setattr(fetch_jobs, "get_source", lambda company: source)
     monkeypatch.setattr(
@@ -496,8 +542,55 @@ def test_main_passes_debug_output_flags(monkeypatch) -> None:
 
     assert fetch_kwargs == [
         {
+            "job_limit": None,
             "write_raw_jobs": True,
             "write_evaluated_jobs": True,
+            "write_validation_report": False,
+        }
+    ]
+
+
+def test_main_passes_job_limit_flag(monkeypatch) -> None:
+    source = SourceDefinition(
+        company_slug="sioux",
+        source_url="https://example.com/jobs",
+        configured_countries=("Netherlands",),
+        configured_languages=("en",),
+        adapter=FakeAdapter(
+            SourceRetrievalResult(
+                job_links=[],
+                discipline_map={},
+                validation_report={},
+            )
+        ),
+        parser=FakeParser(),
+    )
+    fetch_kwargs: list[dict[str, object]] = []
+
+    monkeypatch.setattr(fetch_jobs, "get_source", lambda company: source)
+    monkeypatch.setattr(
+        fetch_jobs,
+        "fetch_source_jobs",
+        lambda browser, resolved_source, **kwargs: (
+            fetch_kwargs.append(kwargs)
+            or fetch_jobs.FetchSourceJobsResult(jobs=[], matched_jobs=[])
+        ),
+    )
+    monkeypatch.setattr(fetch_jobs, "sync_playwright", lambda: _yield(object()))
+    monkeypatch.setattr(
+        fetch_jobs,
+        "launched_chromium",
+        lambda playwright, *, headless=True: _yield(object()),
+    )
+    monkeypatch.setattr(fetch_jobs, "log", lambda _message: None)
+
+    fetch_jobs.main(["--company", "sioux", "--job-limit", "1"])
+
+    assert fetch_kwargs == [
+        {
+            "job_limit": 1,
+            "write_raw_jobs": False,
+            "write_evaluated_jobs": False,
             "write_validation_report": False,
         }
     ]
