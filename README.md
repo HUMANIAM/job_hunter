@@ -39,7 +39,7 @@ Run a syntax check:
 
 ## Usage
 
-Fetch jobs for the default source (`sioux`) and write only the final kept-jobs file:
+Fetch jobs for the default source (`sioux`) and write only the final per-job match artifacts:
 
 ```bash
 .venv/bin/python fetch_jobs.py
@@ -51,7 +51,7 @@ Fetch a specific source:
 .venv/bin/python fetch_jobs.py --company sioux
 ```
 
-Write all optional artifacts as well:
+Write all optional debug artifacts as well:
 
 ```bash
 .venv/bin/python fetch_jobs.py \
@@ -64,26 +64,26 @@ Write all optional artifacts as well:
 ### CLI Options
 
 - `--company <slug>`: source/company slug to fetch. Defaults to `sioux`.
-- `--write-raw`: write the raw collected jobs artifact.
-- `--write-evaluated`: write the evaluated jobs artifact with keep/skip metadata.
+- `--write-raw`: write per-job raw collected job artifacts.
+- `--write-evaluated`: write per-job evaluated job artifacts with keep/skip metadata.
 - `--write-validation`: write the collection validation artifact.
 
 ## Output Files
 
-All generated files are written under `data/analysis/<company>/`.
+All generated files are written under `data/job_profiles/<company>/`.
 
 Default run:
 
-- `jobs_<company>.json`: final kept jobs after relevance filtering. This file is always written.
+- `match/<job_title>__<url_hash>.json`: the final merged job payload for jobs that passed the evaluator.
 
 Optional files:
 
-- `jobs_<company>_raw.json`: all fetched job payloads before ranking.
-- `jobs_<company>_evaluated.json`: fetched jobs plus keep/skip decision metadata.
+- `raw/<job_title>__<url_hash>.json`: final merged job payload written as soon as extraction completes for a job.
+- `evaluated/<job_title>__<url_hash>.json`: the same job payload plus keep/skip evaluation metadata, written immediately after ranking.
 - `jobs_<company>_validation.json`: collection validation report from the adapter.
 
 ## Repository Policy
 
-Generated vacancy outputs under `data/analysis/sioux/` are local artifacts and are not tracked as source files.
+Local artifacts under `data/` are not tracked as source files.
 
 The repository should track source code, tests, and project metadata, while keeping local environment state and generated data out of version control.

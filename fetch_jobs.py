@@ -10,9 +10,9 @@ What it does:
 - collects vacancy detail links
 - visits each vacancy page
 - extracts useful fields
-- applies a keep/skip filter
-- always writes the final kept-jobs file under data/analysis/<company>
-- optionally writes raw, evaluated, and validation artifacts when requested
+- writes final per-job match files under data/job_profiles/<company>/match
+- optionally writes per-job raw and evaluated state files
+- optionally writes the collection validation report under data/job_profiles/<company>
 
 Requirements:
     pip install playwright
@@ -23,16 +23,23 @@ from __future__ import annotations
 
 import argparse
 import time
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from typing import Any, Sequence
 
 from playwright.sync_api import sync_playwright
+
 from infra.browser import launched_chromium
 from infra.logging import log
-from ranking.service import evaluate_jobs
+from ranking.evaluator import evaluate_job
 from reporting import writer as report_writer
 from sources.base import SourceDefinition
 from sources.registry import get_source, list_available_sources
+
+
+@dataclass
+class FetchSourceJobsResult:
+    jobs: list[Any]
+    matched_jobs: list[Any]
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -48,12 +55,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--write-raw",
         action="store_true",
-        help="Write the raw collected jobs artifact.",
+        help="Write per-job raw collected job artifacts.",
     )
     parser.add_argument(
         "--write-evaluated",
         action="store_true",
-        help="Write the evaluated jobs artifact with keep/skip metadata.",
+        help="Write per-job evaluated job artifacts with keep/skip metadata.",
     )
     parser.add_argument(
         "--write-validation",
@@ -63,12 +70,64 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(list(argv) if argv is not None else None)
 
 
+def _log_evaluation(
+    job: Any,
+    evaluation: dict[str, Any],
+    *,
+    index: int,
+    log_message,
+) -> None:
+    if log_message is None:
+        return
+
+    if evaluation["decision"] == "keep":
+        log_message(
+            f"KEEP [{index}] '{job.title}' | "
+            f"reason={evaluation['reason']} | "
+            f"title_hits={evaluation['title_hits']} | "
+            f"description_hits={evaluation['description_hits']}"
+        )
+        return
+
+    log_message(
+        f"SKIP [{index}] '{job.title}' | "
+        f"reason={evaluation['reason']} | "
+        f"skip_hits={evaluation['skip_hits']} | "
+        f"description_hits={evaluation['description_hits']}"
+    )
+
+
+def _evaluate_job_payload(
+    job: Any,
+    *,
+    index: int,
+    log_message,
+) -> tuple[dict[str, Any], bool]:
+    evaluation = evaluate_job(job)
+    _log_evaluation(
+        job,
+        evaluation,
+        index=index,
+        log_message=log_message,
+    )
+
+    job_payload = asdict(job)
+    job_payload["decision"] = evaluation["decision"]
+    job_payload["reason"] = evaluation["reason"]
+    job_payload["skip_hits"] = evaluation["skip_hits"]
+    job_payload["title_hits"] = evaluation["title_hits"]
+    job_payload["description_hits"] = evaluation["description_hits"]
+    return job_payload, evaluation["decision"] == "keep"
+
+
 def fetch_source_jobs(
     browser: Any,
     source: SourceDefinition,
     *,
+    write_raw_jobs: bool = False,
+    write_evaluated_jobs: bool = False,
     write_validation_report: bool = False,
-) -> list[Any]:
+) -> FetchSourceJobsResult:
     retrieval = source.adapter.retrieve_job_links(browser)
     source.adapter.log_validation_report(retrieval.validation_report)
     if write_validation_report:
@@ -85,20 +144,59 @@ def fetch_source_jobs(
     detail_page = detail_context.new_page()
 
     jobs: list[Any] = []
-    for idx, url in enumerate(job_links, start=1):
-        log(f"fetch progress: [{idx}/{len(job_links)}]")
-        job = source.parser.fetch_job(
-            detail_page,
-            url,
-            discipline_map.get(url, []),
-            log_message=log,
-        )
-        if job:
-            jobs.append(job)
+    matched_jobs: list[Any] = []
+    try:
+        for idx, url in enumerate(job_links, start=1):
+            log(f"fetch progress: [{idx}/{len(job_links)}]")
+            try:
+                job = source.parser.fetch_job(
+                    detail_page,
+                    url,
+                    discipline_map.get(url, []),
+                    log_message=log,
+                )
+                if job is None:
+                    continue
 
-    detail_context.close()
+                raw_job_payload = asdict(job)
+                if write_raw_jobs:
+                    report_writer.write_raw_job(
+                        raw_job_payload,
+                        company_slug=source.company_slug,
+                        log_message=log,
+                    )
+
+                evaluated_job_payload, is_match = _evaluate_job_payload(
+                    job,
+                    index=idx,
+                    log_message=log,
+                )
+                if write_evaluated_jobs:
+                    report_writer.write_evaluated_job(
+                        evaluated_job_payload,
+                        company_slug=source.company_slug,
+                        log_message=log,
+                    )
+
+                if is_match:
+                    report_writer.write_match_job(
+                        raw_job_payload,
+                        company_slug=source.company_slug,
+                        log_message=log,
+                    )
+                    matched_jobs.append(job)
+
+                jobs.append(job)
+            except Exception as error:
+                log(f"job failed: url='{url}' | error={error!r}")
+    finally:
+        detail_context.close()
+
     log(f"closing browser after fetching {len(jobs)} jobs")
-    return jobs
+    return FetchSourceJobsResult(
+        jobs=jobs,
+        matched_jobs=matched_jobs,
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -113,50 +211,18 @@ def main(argv: Sequence[str] | None = None) -> None:
     with sync_playwright() as p:
         log("launching chromium")
         with launched_chromium(p, headless=True) as browser:
-            jobs = fetch_source_jobs(
+            result = fetch_source_jobs(
                 browser,
                 source,
+                write_raw_jobs=args.write_raw,
+                write_evaluated_jobs=args.write_evaluated,
                 write_validation_report=args.write_validation,
             )
 
-    if args.write_raw:
-        raw_jobs = [asdict(job) for job in jobs]
-        report_writer.write_raw_jobs(
-            jobs=raw_jobs,
-            source=source.source_url,
-            configured_countries=source.configured_countries,
-            configured_languages=source.configured_languages,
-            company_slug=source.company_slug,
-            log_message=log,
-        )
-
-    log("starting evaluation")
-    ranking_result = evaluate_jobs(jobs, log_message=log)
-
-    if args.write_evaluated:
-        report_writer.write_evaluated_jobs(
-            jobs=ranking_result.evaluated_jobs,
-            source=source.source_url,
-            configured_countries=source.configured_countries,
-            configured_languages=source.configured_languages,
-            company_slug=source.company_slug,
-            log_message=log,
-        )
-
-    report_writer.write_kept_jobs(
-        jobs=[asdict(job) for job in ranking_result.kept_jobs],
-        total_jobs=len(jobs),
-        source=source.source_url,
-        configured_countries=source.configured_countries,
-        configured_languages=source.configured_languages,
-        company_slug=source.company_slug,
-        log_message=log,
-    )
-
     elapsed = time.time() - started_at
     log(
-        f"done: total_jobs={len(jobs)} | "
-        f"relevant_jobs={len(ranking_result.kept_jobs)} | "
+        f"done: total_jobs={len(result.jobs)} | "
+        f"relevant_jobs={len(result.matched_jobs)} | "
         f"elapsed_seconds={elapsed:.2f}"
     )
 

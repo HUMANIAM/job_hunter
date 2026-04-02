@@ -11,5 +11,5 @@ build/
 *.egg-info/
 *.zip
 
-# Generated scraper artifacts
-data/analysis/sioux/
+# Local data artifacts
+data/
