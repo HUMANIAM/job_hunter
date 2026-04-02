@@ -50,6 +50,12 @@ def test_parse_args_accepts_candidate_profile_option() -> None:
     assert args.candidate_profile == Path("data/candidate_profiles/custom.json")
 
 
+def test_parse_args_accepts_cv_option() -> None:
+    args = job_hunter.parse_args(["--cv", "data/candidate_profiles/custom.json"])
+
+    assert args.candidate_profile == Path("data/candidate_profiles/custom.json")
+
+
 def test_parse_args_accepts_job_limit_option() -> None:
     args = job_hunter.parse_args(["--job-limit", "1"])
 
