@@ -11,7 +11,8 @@ What it does:
 - visits each vacancy page
 - extracts useful fields
 - applies a keep/skip filter
-- writes four company-keyed files under data/analysis/<company>
+- always writes the final kept-jobs file under data/analysis/<company>
+- optionally writes raw, evaluated, and validation artifacts when requested
 
 Requirements:
     pip install playwright
@@ -44,17 +45,38 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             f"Available: {', '.join(list_available_sources())}"
         ),
     )
+    parser.add_argument(
+        "--write-raw",
+        action="store_true",
+        help="Write the raw collected jobs artifact.",
+    )
+    parser.add_argument(
+        "--write-evaluated",
+        action="store_true",
+        help="Write the evaluated jobs artifact with keep/skip metadata.",
+    )
+    parser.add_argument(
+        "--write-validation",
+        action="store_true",
+        help="Write the source validation artifact.",
+    )
     return parser.parse_args(list(argv) if argv is not None else None)
 
 
-def fetch_source_jobs(browser: Any, source: SourceDefinition) -> list[Any]:
+def fetch_source_jobs(
+    browser: Any,
+    source: SourceDefinition,
+    *,
+    write_validation_report: bool = False,
+) -> list[Any]:
     retrieval = source.adapter.retrieve_job_links(browser)
     source.adapter.log_validation_report(retrieval.validation_report)
-    report_writer.write_validation_report(
-        retrieval.validation_report,
-        company_slug=source.company_slug,
-        log_message=log,
-    )
+    if write_validation_report:
+        report_writer.write_validation_report(
+            retrieval.validation_report,
+            company_slug=source.company_slug,
+            log_message=log,
+        )
 
     job_links = retrieval.job_links
     discipline_map = retrieval.discipline_map
@@ -91,29 +113,35 @@ def main(argv: Sequence[str] | None = None) -> None:
     with sync_playwright() as p:
         log("launching chromium")
         with launched_chromium(p, headless=True) as browser:
-            jobs = fetch_source_jobs(browser, source)
+            jobs = fetch_source_jobs(
+                browser,
+                source,
+                write_validation_report=args.write_validation,
+            )
 
-    raw_jobs = [asdict(job) for job in jobs]
-    report_writer.write_raw_jobs(
-        jobs=raw_jobs,
-        source=source.source_url,
-        configured_countries=source.configured_countries,
-        configured_languages=source.configured_languages,
-        company_slug=source.company_slug,
-        log_message=log,
-    )
+    if args.write_raw:
+        raw_jobs = [asdict(job) for job in jobs]
+        report_writer.write_raw_jobs(
+            jobs=raw_jobs,
+            source=source.source_url,
+            configured_countries=source.configured_countries,
+            configured_languages=source.configured_languages,
+            company_slug=source.company_slug,
+            log_message=log,
+        )
 
     log("starting evaluation")
     ranking_result = evaluate_jobs(jobs, log_message=log)
 
-    report_writer.write_evaluated_jobs(
-        jobs=ranking_result.evaluated_jobs,
-        source=source.source_url,
-        configured_countries=source.configured_countries,
-        configured_languages=source.configured_languages,
-        company_slug=source.company_slug,
-        log_message=log,
-    )
+    if args.write_evaluated:
+        report_writer.write_evaluated_jobs(
+            jobs=ranking_result.evaluated_jobs,
+            source=source.source_url,
+            configured_countries=source.configured_countries,
+            configured_languages=source.configured_languages,
+            company_slug=source.company_slug,
+            log_message=log,
+        )
 
     report_writer.write_kept_jobs(
         jobs=[asdict(job) for job in ranking_result.kept_jobs],
