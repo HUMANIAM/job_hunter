@@ -10,7 +10,6 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from shared.normalizer import normalize_text
 from sources.sioux.llm import (
-    SiouxLlmEvidencePayload,
     SiouxLlmExtractionPayload,
     SiouxLlmExtractor,
     get_default_llm_extractor,
@@ -48,19 +47,38 @@ class SiouxJobDeterministic:
 
 
 @dataclass
-class SiouxJobLlmEvidence:
-    required_skills: list[str]
-    preferred_skills: list[str]
-    required_languages: list[str]
-    preferred_languages: list[str]
-    required_protocols: list[str]
-    preferred_protocols: list[str]
-    required_standards: list[str]
-    preferred_standards: list[str]
-    required_domains: list[str]
-    preferred_domains: list[str]
-    seniority_hint: list[str]
-    restrictions: list[str]
+class SiouxJobFeature:
+    name: str
+    requirement_level: str
+    confidence: float
+    evidence: list[str]
+    source_kind: str
+
+
+@dataclass
+class SiouxJobRestriction:
+    value: str
+    confidence: float
+    evidence: list[str]
+    source_kind: str
+
+
+@dataclass
+class SiouxJobSeniority:
+    value: str | None
+    confidence: float
+    evidence: list[str]
+    source_kind: str | None
+
+
+@dataclass
+class SiouxJobYearsExperienceRequirement:
+    min_years: int | None
+    max_years: int | None
+    requirement_level: str | None
+    confidence: float
+    evidence: list[str]
+    source_kind: str | None
 
 
 @dataclass
@@ -71,20 +89,15 @@ class SiouxJob:
     location: str | None
     team: str | None
     work_experience: str | None
-    min_years_experience: int | None
-    max_years_experience: int | None
-    experience_text: str | None
+    years_experience_requirement: SiouxJobYearsExperienceRequirement
     educational_background: str | None
     required_degrees: list[str]
-    required_languages: list[str]
-    preferred_languages: list[str]
-    required_protocols: list[str]
-    preferred_protocols: list[str]
-    required_standards: list[str]
-    preferred_standards: list[str]
+    skills: list[SiouxJobFeature]
+    languages: list[SiouxJobFeature]
+    protocols: list[SiouxJobFeature]
+    standards: list[SiouxJobFeature]
     industry_domains: list[str]
-    required_domains: list[str]
-    preferred_domains: list[str]
+    domains: list[SiouxJobFeature]
     workplace_type: str | None
     fulltime_parttime: str | None
     min_hours_per_week: int | None
@@ -97,11 +110,8 @@ class SiouxJob:
     recruiter_role: str | None
     recruiter_email: str | None
     recruiter_phone: str | None
-    required_skills: list[str]
-    preferred_skills: list[str]
-    seniority_hint: str | None
-    restrictions: list[str]
-    evidence: SiouxJobLlmEvidence
+    seniority: SiouxJobSeniority
+    restrictions: list[SiouxJobRestriction]
     description_text: str
 
 
@@ -130,7 +140,13 @@ HOURS_SINGLE_RE = re.compile(
     re.IGNORECASE,
 )
 DEGREE_PATTERNS = (
-    ("Secondary vocational education", re.compile(r"\b(?:secondary vocational education|secondary vocational|mbo(?:-\d+)?)\b", re.IGNORECASE)),
+    (
+        "Secondary vocational education",
+        re.compile(
+            r"\b(?:secondary vocational education|secondary vocational|mbo(?:-\d+)?)\b",
+            re.IGNORECASE,
+        ),
+    ),
     ("Associate", re.compile(r"\bassociate(?:'s|’s)?\b", re.IGNORECASE)),
     ("Bachelor", re.compile(r"\bbachelor(?:'s|’s)?\b", re.IGNORECASE)),
     ("Master", re.compile(r"\bmaster(?:'s|’s)?\b", re.IGNORECASE)),
@@ -199,9 +215,7 @@ def extract_job_tags(page: Page) -> dict[str, str]:
     for index in range(tag_count):
         tag_node = tag_nodes.nth(index)
         raw_key = (
-            tag_node.get_attribute("data-type")
-            or tag_node.get_attribute("title")
-            or ""
+            tag_node.get_attribute("data-type") or tag_node.get_attribute("title") or ""
         )
         key = normalize_job_tag_key(raw_key)
         if not key:
@@ -304,7 +318,7 @@ def extract_value_by_label(page: Page, label: str) -> str | None:
         block_text = normalize_text(parent.inner_text(timeout=2000))
 
         if block_text.lower().startswith(label.lower()):
-            value = block_text[len(label):].strip(" :\n\t")
+            value = block_text[len(label) :].strip(" :\n\t")
             return value or None
 
         return None
@@ -457,15 +471,31 @@ def resolve_remote_policy(
         return "Hybrid"
     if "remote" in lowered_workplace_type:
         return "Remote"
-    if any(token in lowered_workplace_type for token in ("on-site", "onsite", "on site", "office")):
+    if any(
+        token in lowered_workplace_type
+        for token in ("on-site", "onsite", "on site", "office")
+    ):
         return "On-site"
 
     normalized_description = normalize_text(description_text).lower()
-    if any(phrase in normalized_description for phrase in ("fully remote", "100% remote", "remote-first")):
+    if any(
+        phrase in normalized_description
+        for phrase in ("fully remote", "100% remote", "remote-first")
+    ):
         return "Remote"
-    if any(phrase in normalized_description for phrase in ("work from home", "working from home", "room to work from home", "home office")):
+    if any(
+        phrase in normalized_description
+        for phrase in (
+            "work from home",
+            "working from home",
+            "room to work from home",
+            "home office",
+        )
+    ):
         return "Hybrid"
-    if any(phrase in normalized_description for phrase in ("on-site", "onsite", "on site")):
+    if any(
+        phrase in normalized_description for phrase in ("on-site", "onsite", "on site")
+    ):
         return "On-site"
 
     return None
@@ -520,6 +550,94 @@ def split_recruiter_identity(text: str) -> tuple[str | None, str | None]:
     return recruiter_name, recruiter_role
 
 
+def _infer_requirement_level(text: str | None) -> str | None:
+    normalized = normalize_text(text or "").lower()
+    if not normalized:
+        return None
+
+    preferred_markers = (
+        "is a plus",
+        "are a plus",
+        "nice to have",
+        "preferred",
+        "preferably",
+        "would be nice",
+    )
+    if any(marker in normalized for marker in preferred_markers):
+        return "preferred"
+    return "required"
+
+
+def _build_feature_items(
+    values: Iterable[object],
+) -> list[SiouxJobFeature]:
+    return [
+        SiouxJobFeature(
+            name=getattr(value, "name"),
+            requirement_level=getattr(value, "requirement_level"),
+            confidence=getattr(value, "confidence"),
+            evidence=list(getattr(value, "evidence")),
+            source_kind="llm",
+        )
+        for value in values
+    ]
+
+
+def _build_restrictions(
+    values: Iterable[object],
+) -> list[SiouxJobRestriction]:
+    return [
+        SiouxJobRestriction(
+            value=getattr(value, "value"),
+            confidence=getattr(value, "confidence"),
+            evidence=list(getattr(value, "evidence")),
+            source_kind="llm",
+        )
+        for value in values
+    ]
+
+
+def _build_seniority(value: object) -> SiouxJobSeniority:
+    seniority_value = getattr(value, "value")
+    return SiouxJobSeniority(
+        value=seniority_value,
+        confidence=getattr(value, "confidence"),
+        evidence=list(getattr(value, "evidence")),
+        source_kind="llm" if seniority_value is not None else None,
+    )
+
+
+def _build_years_experience_requirement(
+    job: SiouxJobDeterministic,
+) -> SiouxJobYearsExperienceRequirement:
+    if job.min_years_experience is None and job.max_years_experience is None:
+        return SiouxJobYearsExperienceRequirement(
+            min_years=None,
+            max_years=None,
+            requirement_level=None,
+            confidence=0.0,
+            evidence=[],
+            source_kind=None,
+        )
+
+    evidence: list[str] = []
+    if job.experience_text:
+        evidence.append(job.experience_text)
+    elif job.work_experience:
+        evidence.append(job.work_experience)
+
+    return SiouxJobYearsExperienceRequirement(
+        min_years=job.min_years_experience,
+        max_years=job.max_years_experience,
+        requirement_level=_infer_requirement_level(
+            job.experience_text or job.work_experience
+        ),
+        confidence=0.9,
+        evidence=evidence,
+        source_kind="regex_text",
+    )
+
+
 def extract_recruiter_fields(
     description_text: str,
 ) -> tuple[str | None, str | None, str | None, str | None]:
@@ -538,7 +656,9 @@ def extract_recruiter_fields(
     phone_match = PHONE_RE.search(candidate_window)
     recruiter_phone = normalize_text(phone_match.group(0)) if phone_match else None
 
-    identity_end = phone_match.start() if phone_match else candidate_window.find(recruiter_email)
+    identity_end = (
+        phone_match.start() if phone_match else candidate_window.find(recruiter_email)
+    )
     identity_text = candidate_window[:identity_end].strip(" ,.:;")
     gdpr_marker = "gdpr regulations."
     gdpr_index = identity_text.lower().rfind(gdpr_marker)
@@ -581,10 +701,9 @@ def fetch_job_deterministic(
         description_text,
     )
 
-    educational_background = (
-        metadata["educational_background"]
-        or extract_value_by_label(page, "Educational background")
-    )
+    educational_background = metadata[
+        "educational_background"
+    ] or extract_value_by_label(page, "Educational background")
     required_degrees = extract_required_degrees(
         educational_background,
         description_text,
@@ -637,12 +756,6 @@ def fetch_job_deterministic(
     )
 
 
-def _build_llm_evidence(
-    evidence: SiouxLlmEvidencePayload,
-) -> SiouxJobLlmEvidence:
-    return SiouxJobLlmEvidence(**evidence.model_dump())
-
-
 def _build_job(
     deterministic_job: SiouxJobDeterministic,
     llm_payload: SiouxLlmExtractionPayload,
@@ -654,20 +767,17 @@ def _build_job(
         location=deterministic_job.location,
         team=deterministic_job.team,
         work_experience=deterministic_job.work_experience,
-        min_years_experience=deterministic_job.min_years_experience,
-        max_years_experience=deterministic_job.max_years_experience,
-        experience_text=deterministic_job.experience_text,
+        years_experience_requirement=_build_years_experience_requirement(
+            deterministic_job
+        ),
         educational_background=deterministic_job.educational_background,
         required_degrees=deterministic_job.required_degrees,
-        required_languages=llm_payload.required_languages,
-        preferred_languages=llm_payload.preferred_languages,
-        required_protocols=llm_payload.required_protocols,
-        preferred_protocols=llm_payload.preferred_protocols,
-        required_standards=llm_payload.required_standards,
-        preferred_standards=llm_payload.preferred_standards,
+        skills=_build_feature_items(llm_payload.skills),
+        languages=_build_feature_items(llm_payload.languages),
+        protocols=_build_feature_items(llm_payload.protocols),
+        standards=_build_feature_items(llm_payload.standards),
         industry_domains=deterministic_job.industry_domains,
-        required_domains=llm_payload.required_domains,
-        preferred_domains=llm_payload.preferred_domains,
+        domains=_build_feature_items(llm_payload.domains),
         workplace_type=deterministic_job.workplace_type,
         fulltime_parttime=deterministic_job.fulltime_parttime,
         min_hours_per_week=deterministic_job.min_hours_per_week,
@@ -680,11 +790,8 @@ def _build_job(
         recruiter_role=deterministic_job.recruiter_role,
         recruiter_email=deterministic_job.recruiter_email,
         recruiter_phone=deterministic_job.recruiter_phone,
-        required_skills=llm_payload.required_skills,
-        preferred_skills=llm_payload.preferred_skills,
-        seniority_hint=llm_payload.seniority_hint,
-        restrictions=llm_payload.restrictions,
-        evidence=_build_llm_evidence(llm_payload.evidence),
+        seniority=_build_seniority(llm_payload.seniority),
+        restrictions=_build_restrictions(llm_payload.restrictions),
         description_text=deterministic_job.description_text,
     )
 
@@ -716,17 +823,14 @@ def fetch_job(
         f"disciplines={job.disciplines}, "
         f"location='{job.location}', "
         f"employment='{job.fulltime_parttime}', "
-        f"experience='{job.experience_text}', "
-        f"experience_range=({job.min_years_experience}, {job.max_years_experience}), "
-        f"required_languages={job.required_languages}, "
-        f"preferred_languages={job.preferred_languages}, "
-        f"required_protocols={job.required_protocols}, "
-        f"required_standards={job.required_standards}, "
-        f"required_domains={job.required_domains}, "
-        f"seniority_hint='{job.seniority_hint}', "
-        f"restrictions={job.restrictions}, "
-        f"required_skills={len(job.required_skills)}, "
-        f"preferred_skills={len(job.preferred_skills)}, "
+        f"years_experience={job.years_experience_requirement}, "
+        f"languages={len(job.languages)}, "
+        f"protocols={len(job.protocols)}, "
+        f"standards={len(job.standards)}, "
+        f"domains={len(job.domains)}, "
+        f"seniority='{job.seniority.value}', "
+        f"restrictions={len(job.restrictions)}, "
+        f"skills={len(job.skills)}, "
         f"description_len={len(job.description_text)}",
     )
     return job

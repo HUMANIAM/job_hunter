@@ -1,6 +1,5 @@
 from .extractor import (
     DEFAULT_SIOUX_LLM_MODEL,
-    SiouxLlmEvidencePayload,
     SiouxLlmExtractionPayload,
     SiouxLlmExtractor,
     get_default_llm_extractor,
@@ -9,7 +8,6 @@ from .extractor import (
 
 __all__ = [
     "DEFAULT_SIOUX_LLM_MODEL",
-    "SiouxLlmEvidencePayload",
     "SiouxLlmExtractionPayload",
     "SiouxLlmExtractor",
     "get_default_llm_extractor",

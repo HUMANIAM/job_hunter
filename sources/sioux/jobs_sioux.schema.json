@@ -73,6 +73,47 @@
         "type": "string"
       }
     },
+    "confidenceScore": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "requirementLevel": {
+      "enum": [
+        "required",
+        "preferred"
+      ]
+    },
+    "nullableRequirementLevel": {
+      "enum": [
+        "required",
+        "preferred",
+        null
+      ]
+    },
+    "sourceKind": {
+      "enum": [
+        "llm",
+        "regex_text",
+        "html_tag",
+        "json_ld",
+        "derived_text",
+        "visible_text",
+        "title_match"
+      ]
+    },
+    "nullableSourceKind": {
+      "enum": [
+        "llm",
+        "regex_text",
+        "html_tag",
+        "json_ld",
+        "derived_text",
+        "visible_text",
+        "title_match",
+        null
+      ]
+    },
     "seniorityHint": {
       "enum": [
         "junior",
@@ -84,63 +125,229 @@
         null
       ]
     },
+    "llmFeatureItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "requirement_level",
+        "confidence",
+        "evidence"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "requirement_level": {
+          "$ref": "#/$defs/requirementLevel"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidenceScore"
+        },
+        "evidence": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "jobFeatureItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "requirement_level",
+        "confidence",
+        "evidence",
+        "source_kind"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "requirement_level": {
+          "$ref": "#/$defs/requirementLevel"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidenceScore"
+        },
+        "evidence": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/sourceKind"
+        }
+      }
+    },
+    "llmRestrictionItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "confidence",
+        "evidence"
+      ],
+      "properties": {
+        "value": {
+          "type": "string"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidenceScore"
+        },
+        "evidence": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "jobRestrictionItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "confidence",
+        "evidence",
+        "source_kind"
+      ],
+      "properties": {
+        "value": {
+          "type": "string"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidenceScore"
+        },
+        "evidence": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/sourceKind"
+        }
+      }
+    },
+    "llmSeniorityItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "confidence",
+        "evidence"
+      ],
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/seniorityHint"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidenceScore"
+        },
+        "evidence": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "jobSeniorityItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "confidence",
+        "evidence",
+        "source_kind"
+      ],
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/seniorityHint"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidenceScore"
+        },
+        "evidence": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/nullableSourceKind"
+        }
+      }
+    },
+    "jobYearsExperienceRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "min_years",
+        "max_years",
+        "requirement_level",
+        "confidence",
+        "evidence",
+        "source_kind"
+      ],
+      "properties": {
+        "min_years": {
+          "$ref": "#/$defs/nullableInteger"
+        },
+        "max_years": {
+          "$ref": "#/$defs/nullableInteger"
+        },
+        "requirement_level": {
+          "$ref": "#/$defs/nullableRequirementLevel"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidenceScore"
+        },
+        "evidence": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/nullableSourceKind"
+        }
+      }
+    },
     "llmExtraction": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "required_skills",
-        "preferred_skills",
-        "required_languages",
-        "preferred_languages",
-        "required_protocols",
-        "preferred_protocols",
-        "required_standards",
-        "preferred_standards",
-        "required_domains",
-        "preferred_domains",
-        "seniority_hint",
-        "restrictions",
-        "evidence"
+        "skills",
+        "languages",
+        "protocols",
+        "standards",
+        "domains",
+        "seniority",
+        "restrictions"
       ],
       "properties": {
-        "required_skills": {
-          "$ref": "#/$defs/siouxJob/properties/required_skills"
+        "skills": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/llmFeatureItem"
+          }
         },
-        "preferred_skills": {
-          "$ref": "#/$defs/siouxJob/properties/preferred_skills"
+        "languages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/llmFeatureItem"
+          }
         },
-        "required_languages": {
-          "$ref": "#/$defs/siouxJob/properties/required_languages"
+        "protocols": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/llmFeatureItem"
+          }
         },
-        "preferred_languages": {
-          "$ref": "#/$defs/siouxJob/properties/preferred_languages"
+        "standards": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/llmFeatureItem"
+          }
         },
-        "required_protocols": {
-          "$ref": "#/$defs/siouxJob/properties/required_protocols"
+        "domains": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/llmFeatureItem"
+          }
         },
-        "preferred_protocols": {
-          "$ref": "#/$defs/siouxJob/properties/preferred_protocols"
-        },
-        "required_standards": {
-          "$ref": "#/$defs/siouxJob/properties/required_standards"
-        },
-        "preferred_standards": {
-          "$ref": "#/$defs/siouxJob/properties/preferred_standards"
-        },
-        "required_domains": {
-          "$ref": "#/$defs/siouxJob/properties/required_domains"
-        },
-        "preferred_domains": {
-          "$ref": "#/$defs/siouxJob/properties/preferred_domains"
-        },
-        "seniority_hint": {
-          "$ref": "#/$defs/seniorityHint"
+        "seniority": {
+          "$ref": "#/$defs/llmSeniorityItem"
         },
         "restrictions": {
-          "$ref": "#/$defs/siouxJob/properties/restrictions"
-        },
-        "evidence": {
-          "$ref": "#/$defs/llmEvidence"
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/llmRestrictionItem"
+          }
         }
       }
     },
@@ -193,13 +400,13 @@
           "$ref": "#/$defs/siouxJob/properties/work_experience"
         },
         "min_years_experience": {
-          "$ref": "#/$defs/siouxJob/properties/min_years_experience"
+          "$ref": "#/$defs/nullableInteger"
         },
         "max_years_experience": {
-          "$ref": "#/$defs/siouxJob/properties/max_years_experience"
+          "$ref": "#/$defs/nullableInteger"
         },
         "experience_text": {
-          "$ref": "#/$defs/siouxJob/properties/experience_text"
+          "$ref": "#/$defs/nullableString"
         },
         "educational_background": {
           "$ref": "#/$defs/siouxJob/properties/educational_background"
@@ -248,62 +455,6 @@
         }
       }
     },
-    "llmEvidence": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "required_skills",
-        "preferred_skills",
-        "required_languages",
-        "preferred_languages",
-        "required_protocols",
-        "preferred_protocols",
-        "required_standards",
-        "preferred_standards",
-        "required_domains",
-        "preferred_domains",
-        "seniority_hint",
-        "restrictions"
-      ],
-      "properties": {
-        "required_skills": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "preferred_skills": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "required_languages": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "preferred_languages": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "required_protocols": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "preferred_protocols": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "required_standards": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "preferred_standards": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "required_domains": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "preferred_domains": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "seniority_hint": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "restrictions": {
-          "$ref": "#/$defs/stringArray"
-        }
-      }
-    },
     "siouxJob": {
       "type": "object",
       "additionalProperties": false,
@@ -314,20 +465,15 @@
         "location",
         "team",
         "work_experience",
-        "min_years_experience",
-        "max_years_experience",
-        "experience_text",
+        "years_experience_requirement",
         "educational_background",
         "required_degrees",
-        "required_languages",
-        "preferred_languages",
-        "required_protocols",
-        "preferred_protocols",
-        "required_standards",
-        "preferred_standards",
+        "skills",
+        "languages",
+        "protocols",
+        "standards",
         "industry_domains",
-        "required_domains",
-        "preferred_domains",
+        "domains",
         "workplace_type",
         "fulltime_parttime",
         "min_hours_per_week",
@@ -340,11 +486,8 @@
         "recruiter_role",
         "recruiter_email",
         "recruiter_phone",
-        "required_skills",
-        "preferred_skills",
-        "seniority_hint",
+        "seniority",
         "restrictions",
-        "evidence",
         "description_text"
       ],
       "properties": {
@@ -366,14 +509,8 @@
         "work_experience": {
           "$ref": "#/$defs/nullableString"
         },
-        "min_years_experience": {
-          "$ref": "#/$defs/nullableInteger"
-        },
-        "max_years_experience": {
-          "$ref": "#/$defs/nullableInteger"
-        },
-        "experience_text": {
-          "$ref": "#/$defs/nullableString"
+        "years_experience_requirement": {
+          "$ref": "#/$defs/jobYearsExperienceRequirement"
         },
         "educational_background": {
           "$ref": "#/$defs/nullableString"
@@ -381,32 +518,38 @@
         "required_degrees": {
           "$ref": "#/$defs/stringArray"
         },
-        "required_languages": {
-          "$ref": "#/$defs/stringArray"
+        "skills": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/jobFeatureItem"
+          }
         },
-        "preferred_languages": {
-          "$ref": "#/$defs/stringArray"
+        "languages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/jobFeatureItem"
+          }
         },
-        "required_protocols": {
-          "$ref": "#/$defs/stringArray"
+        "protocols": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/jobFeatureItem"
+          }
         },
-        "preferred_protocols": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "required_standards": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "preferred_standards": {
-          "$ref": "#/$defs/stringArray"
+        "standards": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/jobFeatureItem"
+          }
         },
         "industry_domains": {
           "$ref": "#/$defs/stringArray"
         },
-        "required_domains": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "preferred_domains": {
-          "$ref": "#/$defs/stringArray"
+        "domains": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/jobFeatureItem"
+          }
         },
         "workplace_type": {
           "$ref": "#/$defs/nullableString"
@@ -444,20 +587,14 @@
         "recruiter_phone": {
           "$ref": "#/$defs/nullableString"
         },
-        "required_skills": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "preferred_skills": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "seniority_hint": {
-          "$ref": "#/$defs/seniorityHint"
+        "seniority": {
+          "$ref": "#/$defs/jobSeniorityItem"
         },
         "restrictions": {
-          "$ref": "#/$defs/stringArray"
-        },
-        "evidence": {
-          "$ref": "#/$defs/llmEvidence"
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/jobRestrictionItem"
+          }
         },
         "description_text": {
           "type": "string"

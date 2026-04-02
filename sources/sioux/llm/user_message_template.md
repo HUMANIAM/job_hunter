@@ -8,9 +8,9 @@ Extract the ambiguous ranking-relevant fields from the following job detail.
 - Return JSON only.
 - Match the schema exactly.
 - Be conservative.
-- Do not copy long requirement sentences into skill arrays.
+- Do not copy long requirement sentences into item names or values.
 - Normalize concrete technical terms into compact items.
-- Use `null` or empty arrays when unsupported.
+- Use `null`, `0.0`, or empty arrays when unsupported, according to the schema.
 - Include short evidence snippets.
 
 ## Output Schema

@@ -39,10 +39,14 @@ def test_jobs_sioux_schema_prompt_defs_match_runtime_models() -> None:
     llm_required = schema["$defs"]["llmExtraction"]["required"]
     llm_properties = schema["$defs"]["llmExtraction"]["properties"]
     deterministic_required = schema["$defs"]["siouxJobDeterministicContext"]["required"]
-    deterministic_properties = schema["$defs"]["siouxJobDeterministicContext"]["properties"]
+    deterministic_properties = schema["$defs"]["siouxJobDeterministicContext"][
+        "properties"
+    ]
 
     assert llm_required == list(SiouxLlmExtractionPayload.model_fields.keys())
-    assert list(llm_properties.keys()) == list(SiouxLlmExtractionPayload.model_fields.keys())
+    assert list(llm_properties.keys()) == list(
+        SiouxLlmExtractionPayload.model_fields.keys()
+    )
     assert deterministic_required == [
         field.name
         for field in fields(SiouxJobDeterministic)

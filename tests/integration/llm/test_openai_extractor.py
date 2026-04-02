@@ -60,8 +60,22 @@ def _make_job(
     )
 
 
-def _lowered(values: list[str]) -> set[str]:
-    return {value.lower() for value in values}
+def _lowered_names(
+    values: list[object], requirement_level: str | None = None
+) -> set[str]:
+    lowered_values: set[str] = set()
+    for value in values:
+        if (
+            requirement_level is not None
+            and getattr(value, "requirement_level") != requirement_level
+        ):
+            continue
+        lowered_values.add(getattr(value, "name").lower())
+    return lowered_values
+
+
+def _restriction_values(values: list[object]) -> str:
+    return " ".join(getattr(value, "value").lower() for value in values)
 
 
 def test_openai_extractor_returns_empty_and_null_for_unsupported_fields(
@@ -79,30 +93,14 @@ def test_openai_extractor_returns_empty_and_null_for_unsupported_fields(
 
     result = extractor.extract(job)
 
-    assert result.required_skills == []
-    assert result.preferred_skills == []
-    assert result.required_languages == []
-    assert result.preferred_languages == []
-    assert result.required_protocols == []
-    assert result.preferred_protocols == []
-    assert result.required_standards == []
-    assert result.preferred_standards == []
-    assert result.required_domains == []
-    assert result.preferred_domains == []
-    assert result.seniority_hint is None
+    assert result.skills == []
+    assert result.languages == []
+    assert result.protocols == []
+    assert result.standards == []
+    assert result.domains == []
+    assert result.seniority.value is None
     assert result.restrictions == []
-    assert result.evidence.required_skills == []
-    assert result.evidence.preferred_skills == []
-    assert result.evidence.required_languages == []
-    assert result.evidence.preferred_languages == []
-    assert result.evidence.required_protocols == []
-    assert result.evidence.preferred_protocols == []
-    assert result.evidence.required_standards == []
-    assert result.evidence.preferred_standards == []
-    assert result.evidence.required_domains == []
-    assert result.evidence.preferred_domains == []
-    assert result.evidence.seniority_hint == []
-    assert result.evidence.restrictions == []
+    assert result.seniority.evidence == []
 
 
 def test_openai_extractor_recognizes_all_schema_fields(
@@ -130,17 +128,17 @@ def test_openai_extractor_recognizes_all_schema_fields(
     )
 
     result = extractor.extract(job)
-    required_skills = _lowered(result.required_skills)
-    preferred_skills = _lowered(result.preferred_skills)
-    required_languages = _lowered(result.required_languages)
-    preferred_languages = _lowered(result.preferred_languages)
-    required_protocols = _lowered(result.required_protocols)
-    preferred_protocols = _lowered(result.preferred_protocols)
-    required_standards = _lowered(result.required_standards)
-    preferred_standards = _lowered(result.preferred_standards)
-    required_domains = _lowered(result.required_domains)
-    preferred_domains = _lowered(result.preferred_domains)
-    restrictions_text = " ".join(result.restrictions).lower()
+    required_skills = _lowered_names(result.skills, "required")
+    preferred_skills = _lowered_names(result.skills, "preferred")
+    required_languages = _lowered_names(result.languages, "required")
+    preferred_languages = _lowered_names(result.languages, "preferred")
+    required_protocols = _lowered_names(result.protocols, "required")
+    preferred_protocols = _lowered_names(result.protocols, "preferred")
+    required_standards = _lowered_names(result.standards, "required")
+    preferred_standards = _lowered_names(result.standards, "preferred")
+    required_domains = _lowered_names(result.domains, "required")
+    preferred_domains = _lowered_names(result.domains, "preferred")
+    restrictions_text = _restriction_values(result.restrictions)
 
     assert "python" in required_skills
     assert "c++" in required_skills
@@ -158,22 +156,17 @@ def test_openai_extractor_recognizes_all_schema_fields(
     assert "semiconductor" in required_domains
     assert any("medical" in value for value in required_domains)
     assert "robotics" in preferred_domains
-    assert result.seniority_hint == "senior"
+    assert result.seniority.value == "senior"
     assert "work authorization" in restrictions_text
     assert "security clearance" in restrictions_text
 
-    assert result.evidence.required_skills
-    assert result.evidence.preferred_skills
-    assert result.evidence.required_languages
-    assert result.evidence.preferred_languages
-    assert result.evidence.required_protocols
-    assert result.evidence.preferred_protocols
-    assert result.evidence.required_standards
-    assert result.evidence.preferred_standards
-    assert result.evidence.required_domains
-    assert result.evidence.preferred_domains
-    assert result.evidence.seniority_hint
-    assert result.evidence.restrictions
+    assert all(value.evidence for value in result.skills)
+    assert all(value.evidence for value in result.languages)
+    assert all(value.evidence for value in result.protocols)
+    assert all(value.evidence for value in result.standards)
+    assert all(value.evidence for value in result.domains)
+    assert result.seniority.evidence
+    assert all(value.evidence for value in result.restrictions)
 
 
 def test_openai_extractor_handles_mixed_null_and_non_null_outputs(
@@ -194,28 +187,18 @@ def test_openai_extractor_handles_mixed_null_and_non_null_outputs(
 
     result = extractor.extract(job)
 
-    assert "python" in _lowered(result.required_skills)
-    assert result.preferred_skills == []
-    assert _lowered(result.required_languages) == {"english"}
-    assert result.preferred_languages == []
-    assert _lowered(result.required_protocols) == {"can"}
-    assert result.preferred_protocols == []
-    assert result.required_standards == []
-    assert result.preferred_standards == []
-    assert result.required_domains == []
-    assert result.preferred_domains == []
-    assert result.seniority_hint == "medior"
+    assert "python" in _lowered_names(result.skills, "required")
+    assert _lowered_names(result.skills, "preferred") == set()
+    assert _lowered_names(result.languages, "required") == {"english"}
+    assert _lowered_names(result.languages, "preferred") == set()
+    assert _lowered_names(result.protocols, "required") == {"can"}
+    assert _lowered_names(result.protocols, "preferred") == set()
+    assert result.standards == []
+    assert result.domains == []
+    assert result.seniority.value == "medior"
     assert result.restrictions == []
 
-    assert result.evidence.required_skills
-    assert result.evidence.required_languages
-    assert result.evidence.required_protocols
-    assert result.evidence.seniority_hint
-    assert result.evidence.preferred_skills == []
-    assert result.evidence.preferred_languages == []
-    assert result.evidence.preferred_protocols == []
-    assert result.evidence.required_standards == []
-    assert result.evidence.preferred_standards == []
-    assert result.evidence.required_domains == []
-    assert result.evidence.preferred_domains == []
-    assert result.evidence.restrictions == []
+    assert all(value.evidence for value in result.skills)
+    assert all(value.evidence for value in result.languages)
+    assert all(value.evidence for value in result.protocols)
+    assert result.seniority.evidence
