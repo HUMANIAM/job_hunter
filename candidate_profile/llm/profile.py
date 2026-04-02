@@ -19,13 +19,20 @@ from shared.llm import (
     require_env_value,
 )
 
-DEFAULT_SEARCH_PROFILE_LLM_MODEL = "gpt-5.4-mini"
-DEFAULT_SEARCH_PROFILE_MAX_COMPLETION_TOKENS = 3000
-SEARCH_PROFILE_SCHEMA_VERSION = "2.0.0"
+DEFAULT_CANDIDATE_PROFILE_LLM_MODEL = "gpt-5.4-mini"
+DEFAULT_CANDIDATE_PROFILE_MAX_COMPLETION_TOKENS = 3000
+CANDIDATE_PROFILE_SCHEMA_VERSION = "2.0.0"
 
-SCHEMA_PATH = Path(__file__).with_name("search_profile_schema.json")
-SYSTEM_MESSAGE_PATH = Path(__file__).with_name("search_profile_system_message.md")
-USER_TEMPLATE_PATH = Path(__file__).with_name("search_profile_user_message_template.md")
+# Backward-compatible aliases for the pre-rename API.
+DEFAULT_SEARCH_PROFILE_LLM_MODEL = DEFAULT_CANDIDATE_PROFILE_LLM_MODEL
+DEFAULT_SEARCH_PROFILE_MAX_COMPLETION_TOKENS = (
+    DEFAULT_CANDIDATE_PROFILE_MAX_COMPLETION_TOKENS
+)
+SEARCH_PROFILE_SCHEMA_VERSION = CANDIDATE_PROFILE_SCHEMA_VERSION
+
+SCHEMA_PATH = Path(__file__).with_name("candidate_profile_schema.json")
+SYSTEM_MESSAGE_PATH = Path(__file__).with_name("candidate_profile_system_message.md")
+USER_TEMPLATE_PATH = Path(__file__).with_name("candidate_profile_user_message_template.md")
 
 _STRENGTH_RANK = {
     "exposure": 0,
@@ -93,7 +100,7 @@ def compute_source_text_hash(profile_text: str) -> str:
     return hashlib.sha256(profile_text.encode("utf-8")).hexdigest()
 
 
-class SearchProfileEvidenceBackedItem(BaseModel):
+class CandidateProfileEvidenceBackedItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     confidence: float
@@ -110,7 +117,7 @@ class SearchProfileEvidenceBackedItem(BaseModel):
         return _dedupe_and_strip(values)
 
 
-class SearchProfileFeatureItem(SearchProfileEvidenceBackedItem):
+class CandidateProfileFeatureItem(CandidateProfileEvidenceBackedItem):
     name: str
     strength: Literal["core", "strong", "secondary", "exposure"]
 
@@ -123,13 +130,13 @@ class SearchProfileFeatureItem(SearchProfileEvidenceBackedItem):
         return normalized
 
     @model_validator(mode="after")
-    def validate_item(self) -> "SearchProfileFeatureItem":
+    def validate_item(self) -> "CandidateProfileFeatureItem":
         if not self.evidence:
             raise ValueError("evidence must not be empty for extracted feature items")
         return self
 
 
-class SearchProfileLanguageItem(SearchProfileEvidenceBackedItem):
+class CandidateProfileLanguageItem(CandidateProfileEvidenceBackedItem):
     name: str
     level: Optional[
         Literal[
@@ -160,13 +167,13 @@ class SearchProfileLanguageItem(SearchProfileEvidenceBackedItem):
         return normalized or None
 
     @model_validator(mode="after")
-    def validate_item(self) -> "SearchProfileLanguageItem":
+    def validate_item(self) -> "CandidateProfileLanguageItem":
         if not self.evidence:
             raise ValueError("evidence must not be empty for extracted language items")
         return self
 
 
-class SearchProfileSeniorityItem(SearchProfileEvidenceBackedItem):
+class CandidateProfileSeniorityItem(CandidateProfileEvidenceBackedItem):
     value: Optional[Literal["junior", "medior", "senior", "lead", "principal", "staff"]]
 
     @field_validator("value", mode="before")
@@ -179,13 +186,13 @@ class SearchProfileSeniorityItem(SearchProfileEvidenceBackedItem):
         return normalized or None
 
     @model_validator(mode="after")
-    def validate_item(self) -> "SearchProfileSeniorityItem":
+    def validate_item(self) -> "CandidateProfileSeniorityItem":
         if self.value is not None and not self.evidence:
             raise ValueError("evidence must not be empty when seniority has a value")
         return self
 
 
-class SearchProfileYearsExperienceItem(SearchProfileEvidenceBackedItem):
+class CandidateProfileYearsExperienceItem(CandidateProfileEvidenceBackedItem):
     value: Optional[int]
 
     @field_validator("value")
@@ -196,7 +203,7 @@ class SearchProfileYearsExperienceItem(SearchProfileEvidenceBackedItem):
         return value
 
     @model_validator(mode="after")
-    def validate_item(self) -> "SearchProfileYearsExperienceItem":
+    def validate_item(self) -> "CandidateProfileYearsExperienceItem":
         if self.value is not None and not self.evidence:
             raise ValueError(
                 "evidence must not be empty when years_experience_total has a value"
@@ -204,7 +211,7 @@ class SearchProfileYearsExperienceItem(SearchProfileEvidenceBackedItem):
         return self
 
 
-class SearchProfileCandidateConstraints(SearchProfileEvidenceBackedItem):
+class CandidateProfileCandidateConstraints(CandidateProfileEvidenceBackedItem):
     preferred_locations: List[str]
     excluded_locations: List[str]
     preferred_workplace_types: List[str]
@@ -226,7 +233,7 @@ class SearchProfileCandidateConstraints(SearchProfileEvidenceBackedItem):
         return _dedupe_and_strip(values)
 
     @model_validator(mode="after")
-    def validate_item(self) -> "SearchProfileCandidateConstraints":
+    def validate_item(self) -> "CandidateProfileCandidateConstraints":
         has_constraints = any(
             (
                 self.preferred_locations,
@@ -243,25 +250,25 @@ class SearchProfileCandidateConstraints(SearchProfileEvidenceBackedItem):
         return self
 
 
-class SearchProfilePayload(BaseModel):
+class CandidateProfilePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    skills: List[SearchProfileFeatureItem]
-    languages: List[SearchProfileLanguageItem]
-    protocols: List[SearchProfileFeatureItem]
-    standards: List[SearchProfileFeatureItem]
-    domains: List[SearchProfileFeatureItem]
-    seniority: SearchProfileSeniorityItem
-    years_experience_total: SearchProfileYearsExperienceItem
-    candidate_constraints: SearchProfileCandidateConstraints
+    skills: List[CandidateProfileFeatureItem]
+    languages: List[CandidateProfileLanguageItem]
+    protocols: List[CandidateProfileFeatureItem]
+    standards: List[CandidateProfileFeatureItem]
+    domains: List[CandidateProfileFeatureItem]
+    seniority: CandidateProfileSeniorityItem
+    years_experience_total: CandidateProfileYearsExperienceItem
+    candidate_constraints: CandidateProfileCandidateConstraints
 
     @field_validator("skills", "protocols", "standards", "domains", mode="after")
     @classmethod
     def dedupe_feature_items(
         cls,
-        values: List[SearchProfileFeatureItem],
-    ) -> List[SearchProfileFeatureItem]:
-        deduped: dict[str, SearchProfileFeatureItem] = {}
+        values: List[CandidateProfileFeatureItem],
+    ) -> List[CandidateProfileFeatureItem]:
+        deduped: dict[str, CandidateProfileFeatureItem] = {}
 
         for value in values:
             existing = deduped.get(value.name)
@@ -274,7 +281,7 @@ class SearchProfilePayload(BaseModel):
                 if _STRENGTH_RANK[value.strength] > _STRENGTH_RANK[existing.strength]
                 else existing.strength
             )
-            deduped[value.name] = SearchProfileFeatureItem(
+            deduped[value.name] = CandidateProfileFeatureItem(
                 name=existing.name,
                 strength=best_strength,
                 confidence=max(existing.confidence, value.confidence),
@@ -287,9 +294,9 @@ class SearchProfilePayload(BaseModel):
     @classmethod
     def dedupe_language_items(
         cls,
-        values: List[SearchProfileLanguageItem],
-    ) -> List[SearchProfileLanguageItem]:
-        deduped: dict[str, SearchProfileLanguageItem] = {}
+        values: List[CandidateProfileLanguageItem],
+    ) -> List[CandidateProfileLanguageItem]:
+        deduped: dict[str, CandidateProfileLanguageItem] = {}
 
         for value in values:
             existing = deduped.get(value.name)
@@ -304,7 +311,7 @@ class SearchProfilePayload(BaseModel):
             else:
                 preferred_level = existing.level or value.level
 
-            deduped[value.name] = SearchProfileLanguageItem(
+            deduped[value.name] = CandidateProfileLanguageItem(
                 name=existing.name,
                 level=preferred_level,
                 confidence=max(existing.confidence, value.confidence),
@@ -314,12 +321,12 @@ class SearchProfilePayload(BaseModel):
         return list(deduped.values())
 
 
-class SearchProfileDocument(BaseModel):
+class CandidateProfileDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     source_text_hash: str
     schema_version: str
-    profile: SearchProfilePayload
+    profile: CandidateProfilePayload
 
     @field_validator("source_text_hash")
     @classmethod
@@ -349,13 +356,13 @@ def _load_user_template() -> str:
 
 
 @lru_cache(maxsize=1)
-def _load_search_profile_schema() -> Dict[str, Any]:
+def _load_candidate_profile_schema() -> Dict[str, Any]:
     return load_json_file(SCHEMA_PATH)
 
 
 def _render_llm_output_schema_json() -> str:
-    root_schema = _load_search_profile_schema()
-    profile_schema = root_schema["$defs"]["searchProfile"]
+    root_schema = _load_candidate_profile_schema()
+    profile_schema = root_schema["$defs"]["candidateProfile"]
     return render_json(build_json_schema_example(profile_schema, root_schema))
 
 
@@ -363,7 +370,7 @@ def _render_candidate_context_json(candidate_context: Any) -> str:
     return render_json(candidate_context)
 
 
-def render_search_profile_user_message(
+def render_candidate_profile_user_message(
     profile_text: str,
     *,
     candidate_context: Any | None = None,
@@ -372,7 +379,7 @@ def render_search_profile_user_message(
     return render_template(
         template,
         {
-            "{{search_profile_schema_json}}": _render_llm_output_schema_json(),
+            "{{candidate_profile_schema_json}}": _render_llm_output_schema_json(),
             "{{candidate_context_json}}": _render_candidate_context_json(
                 candidate_context
             ),
@@ -393,46 +400,52 @@ def _build_extraction_payload(
 
 
 def _render_user_message(payload: Dict[str, Any]) -> str:
-    return render_search_profile_user_message(
+    return render_candidate_profile_user_message(
         payload["profile_text"],
         candidate_context=payload.get("candidate_context"),
     )
 
 
-class SearchProfileExtractor:
+class CandidateProfileExtractor:
     def __init__(
         self,
         *,
         client: OpenAI,
-        model: str = DEFAULT_SEARCH_PROFILE_LLM_MODEL,
+        model: str = DEFAULT_CANDIDATE_PROFILE_LLM_MODEL,
         timeout_seconds: float = 60.0,
-        max_completion_tokens: int = DEFAULT_SEARCH_PROFILE_MAX_COMPLETION_TOKENS,
+        max_completion_tokens: int = DEFAULT_CANDIDATE_PROFILE_MAX_COMPLETION_TOKENS,
     ) -> None:
         self._extractor = OpenAIStructuredExtractor(
             client=client,
             model=model,
-            response_format=SearchProfilePayload,
+            response_format=CandidateProfilePayload,
             system_message=_load_system_message(),
             render_user_message=_render_user_message,
-            operation_name="Search profile extraction",
+            operation_name="Candidate profile extraction",
             timeout_seconds=timeout_seconds,
             max_completion_tokens=max_completion_tokens,
         )
 
     @classmethod
-    def from_env(cls) -> "SearchProfileExtractor":
+    def from_env(cls) -> "CandidateProfileExtractor":
         api_key = require_env_value(
             "OPENAI_API_KEY",
-            error_context="Search profile extraction",
+            error_context="Candidate profile extraction",
         )
         model = os.environ.get(
-            "SEARCH_PROFILE_LLM_MODEL",
-            DEFAULT_SEARCH_PROFILE_LLM_MODEL,
+            "CANDIDATE_PROFILE_LLM_MODEL",
+            os.environ.get(
+                "SEARCH_PROFILE_LLM_MODEL",
+                DEFAULT_CANDIDATE_PROFILE_LLM_MODEL,
+            ),
         )
         max_completion_tokens = int(
             os.environ.get(
-                "SEARCH_PROFILE_LLM_MAX_COMPLETION_TOKENS",
-                str(DEFAULT_SEARCH_PROFILE_MAX_COMPLETION_TOKENS),
+                "CANDIDATE_PROFILE_LLM_MAX_COMPLETION_TOKENS",
+                os.environ.get(
+                    "SEARCH_PROFILE_LLM_MAX_COMPLETION_TOKENS",
+                    str(DEFAULT_CANDIDATE_PROFILE_MAX_COMPLETION_TOKENS),
+                ),
             )
         )
         return cls(
@@ -446,42 +459,68 @@ class SearchProfileExtractor:
         profile_text: str,
         *,
         candidate_context: Any | None = None,
-    ) -> SearchProfileDocument:
+    ) -> CandidateProfileDocument:
         profile = self._extractor.extract(
             _build_extraction_payload(
                 profile_text,
                 candidate_context=candidate_context,
             )
         )
-        return SearchProfileDocument(
+        return CandidateProfileDocument(
             source_text_hash=compute_source_text_hash(profile_text),
-            schema_version=SEARCH_PROFILE_SCHEMA_VERSION,
+            schema_version=CANDIDATE_PROFILE_SCHEMA_VERSION,
             profile=profile,
         )
 
 
 @lru_cache(maxsize=1)
-def get_default_search_profile_extractor() -> SearchProfileExtractor:
-    return SearchProfileExtractor.from_env()
+def get_default_candidate_profile_extractor() -> CandidateProfileExtractor:
+    return CandidateProfileExtractor.from_env()
 
 
 def extract_profile(
     profile_text: str,
     *,
     candidate_context: Any | None = None,
-    extractor: SearchProfileExtractor | None = None,
-) -> SearchProfileDocument:
-    active_extractor = extractor or get_default_search_profile_extractor()
+    extractor: CandidateProfileExtractor | None = None,
+) -> CandidateProfileDocument:
+    active_extractor = extractor or get_default_candidate_profile_extractor()
     return active_extractor.extract(
         profile_text,
         candidate_context=candidate_context,
     )
 
 
+_load_search_profile_schema = _load_candidate_profile_schema
+render_search_profile_user_message = render_candidate_profile_user_message
+
+SearchProfileEvidenceBackedItem = CandidateProfileEvidenceBackedItem
+SearchProfileFeatureItem = CandidateProfileFeatureItem
+SearchProfileLanguageItem = CandidateProfileLanguageItem
+SearchProfileSeniorityItem = CandidateProfileSeniorityItem
+SearchProfileYearsExperienceItem = CandidateProfileYearsExperienceItem
+SearchProfileCandidateConstraints = CandidateProfileCandidateConstraints
+SearchProfilePayload = CandidateProfilePayload
+SearchProfileDocument = CandidateProfileDocument
+SearchProfileExtractor = CandidateProfileExtractor
+get_default_search_profile_extractor = get_default_candidate_profile_extractor
+
+
 __all__ = [
+    "DEFAULT_CANDIDATE_PROFILE_LLM_MODEL",
+    "DEFAULT_CANDIDATE_PROFILE_MAX_COMPLETION_TOKENS",
+    "CANDIDATE_PROFILE_SCHEMA_VERSION",
     "DEFAULT_SEARCH_PROFILE_LLM_MODEL",
     "DEFAULT_SEARCH_PROFILE_MAX_COMPLETION_TOKENS",
     "SEARCH_PROFILE_SCHEMA_VERSION",
+    "CandidateProfileFeatureItem",
+    "CandidateProfileLanguageItem",
+    "CandidateProfileSeniorityItem",
+    "CandidateProfileYearsExperienceItem",
+    "CandidateProfileCandidateConstraints",
+    "CandidateProfilePayload",
+    "CandidateProfileDocument",
+    "CandidateProfileExtractor",
     "SearchProfileFeatureItem",
     "SearchProfileLanguageItem",
     "SearchProfileSeniorityItem",
@@ -492,6 +531,8 @@ __all__ = [
     "SearchProfileExtractor",
     "compute_source_text_hash",
     "extract_profile",
+    "get_default_candidate_profile_extractor",
     "get_default_search_profile_extractor",
+    "render_candidate_profile_user_message",
     "render_search_profile_user_message",
 ]

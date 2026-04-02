@@ -1,4 +1,4 @@
-# Search Profile LLM User Message Template
+# Candidate Profile LLM User Message Template
 
 Extract a candidate search profile from the following CV/resume text.
 
@@ -7,7 +7,7 @@ Return **JSON only**.
 ## Schema
 
 ```json
-{{search_profile_schema_json}}
+{{candidate_profile_schema_json}}
 ```
 
 ## Optional candidate context
