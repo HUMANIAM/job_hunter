@@ -200,20 +200,17 @@ def _fake_ranking_result(
 
 
 def _patch_ranker(monkeypatch, *, messages: list[str] | None = None) -> None:
-    def fake_rank_jobs(candidate_profile, jobs, *, log_message):
-        if messages is not None and jobs:
+    def fake_rank_job(candidate_profile, job, *, index=None, log_message):
+        if messages is not None:
             log_message(
-                "RANK [1] 'Controls Engineer' | score=0.910 | "
+                f"RANK [{index}] 'Controls Engineer' | score=0.910 | "
                 "skills=0.910 | languages=0.800 | protocols=0.700 | "
                 "standards=0.000 | domains=0.600 | seniority=0.900 | "
                 "years_experience=0.800"
             )
-        return SimpleNamespace(
-            results=[_fake_ranking_result(job) for job in jobs],
-            ranked_jobs=list(jobs),
-        )
+        return _fake_ranking_result(job)
 
-    monkeypatch.setattr(job_hunter, "rank_jobs", fake_rank_jobs)
+    monkeypatch.setattr(job_hunter, "rank_job", fake_rank_job)
 
 
 def test_load_candidate_profile_backfills_candidate_id_from_filename(tmp_path: Path) -> None:
@@ -261,6 +258,137 @@ def test_load_candidate_profile_backfills_candidate_id_from_filename(tmp_path: P
     assert candidate_profile.candidate_id == "Ibrahim_Saad_CV"
 
 
+def test_load_candidate_profile_extracts_from_cv_and_persists_json(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    cv_path = tmp_path / "Ibrahim Saad CV.md"
+    cv_path.write_text("Embedded systems engineer", encoding="utf-8")
+    candidate_profile_dir = tmp_path / "candidate_profiles"
+    writes: list[tuple[dict[str, object], Path]] = []
+    extracted_profile = job_hunter.CandidateProfileDocument.model_validate(
+        {
+            "candidate_id": "Ibrahim_Saad_CV",
+            "source_text_hash": "3a01ac116f682c78fdd0704ed2774349959633d1a81647b79ecd1c396f6443d1",
+            "schema_version": "2.0.0",
+            "profile": {
+                "skills": [],
+                "languages": [],
+                "protocols": [],
+                "standards": [],
+                "domains": [],
+                "seniority": {"value": None, "confidence": 0.0, "evidence": []},
+                "years_experience_total": {
+                    "value": None,
+                    "confidence": 0.0,
+                    "evidence": [],
+                },
+                "candidate_constraints": {
+                    "preferred_locations": [],
+                    "excluded_locations": [],
+                    "preferred_workplace_types": [],
+                    "excluded_workplace_types": [],
+                    "requires_visa_sponsorship": None,
+                    "avoid_export_control_roles": None,
+                    "notes": [],
+                    "confidence": 0.0,
+                    "evidence": [],
+                },
+            },
+        }
+    )
+
+    monkeypatch.setattr(job_hunter, "DEFAULT_CANDIDATE_PROFILE_DIR", candidate_profile_dir)
+    monkeypatch.setattr(job_hunter, "extract_profile", lambda text, *, candidate_id: extracted_profile)
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_candidate_profile",
+        lambda payload, *, output_path, log_message: (
+            writes.append((payload, Path(output_path))) or Path(output_path)
+        ),
+    )
+
+    candidate_profile = job_hunter.load_candidate_profile(cv_path)
+
+    assert candidate_profile == extracted_profile
+    assert writes == [
+        (
+            extracted_profile.model_dump(mode="json"),
+            candidate_profile_dir / "Ibrahim_Saad_CV.json",
+        )
+    ]
+
+
+def test_load_candidate_profile_reuses_cached_json_when_cv_hash_matches(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    candidate_profile_dir = tmp_path / "candidate_profiles"
+    candidate_profile_dir.mkdir()
+    cv_text = "Embedded systems engineer"
+    cached_profile_path = candidate_profile_dir / "Ibrahim_Saad_CV.json"
+    cached_profile_path.write_text(
+        json.dumps(
+            {
+                "candidate_id": "Ibrahim_Saad_CV",
+                "source_text_hash": job_hunter.compute_source_text_hash(cv_text),
+                "schema_version": "2.0.0",
+                "profile": {
+                    "skills": [],
+                    "languages": [],
+                    "protocols": [],
+                    "standards": [],
+                    "domains": [],
+                    "seniority": {
+                        "value": None,
+                        "confidence": 0.0,
+                        "evidence": [],
+                    },
+                    "years_experience_total": {
+                        "value": None,
+                        "confidence": 0.0,
+                        "evidence": [],
+                    },
+                    "candidate_constraints": {
+                        "preferred_locations": [],
+                        "excluded_locations": [],
+                        "preferred_workplace_types": [],
+                        "excluded_workplace_types": [],
+                        "requires_visa_sponsorship": None,
+                        "avoid_export_control_roles": None,
+                        "notes": [],
+                        "confidence": 0.0,
+                        "evidence": [],
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    cv_path = tmp_path / "Ibrahim Saad CV.txt"
+    cv_path.write_text(cv_text, encoding="utf-8")
+
+    monkeypatch.setattr(job_hunter, "DEFAULT_CANDIDATE_PROFILE_DIR", candidate_profile_dir)
+    monkeypatch.setattr(
+        job_hunter,
+        "extract_profile",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("extract_profile should not run when the cached profile matches")
+        ),
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_candidate_profile",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("write_candidate_profile should not run when the cache matches")
+        ),
+    )
+
+    candidate_profile = job_hunter.load_candidate_profile(cv_path)
+
+    assert candidate_profile.candidate_id == "Ibrahim_Saad_CV"
+
+
 def test_fetch_source_jobs_writes_rankings_by_default(monkeypatch) -> None:
     validation_report = {"facet_union_count": 2, "pagination_count": 2}
     retrieval = SourceRetrievalResult(
@@ -288,6 +416,7 @@ def test_fetch_source_jobs_writes_rankings_by_default(monkeypatch) -> None:
     validation_writes: list[tuple[dict[str, object], str, object]] = []
     raw_writes: list[tuple[dict[str, object], str, object]] = []
     evaluated_writes: list[tuple[dict[str, object], str, object]] = []
+    match_writes: list[tuple[dict[str, object], str, object]] = []
     ranking_writes: list[tuple[dict[str, object], object]] = []
 
     monkeypatch.setattr(job_hunter, "log", messages.append)
@@ -315,6 +444,13 @@ def test_fetch_source_jobs_writes_rankings_by_default(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         job_hunter.report_writer,
+        "write_match_job",
+        lambda payload, *, company_slug, log_message: match_writes.append(
+            (payload, company_slug, log_message)
+        ),
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
         "write_ranking_result",
         lambda payload, *, log_message: ranking_writes.append((payload, log_message)),
     )
@@ -335,7 +471,12 @@ def test_fetch_source_jobs_writes_rankings_by_default(monkeypatch) -> None:
     assert adapter.logged_reports == [validation_report]
     assert validation_writes == []
     assert raw_writes == []
-    assert evaluated_writes == []
+    assert len(evaluated_writes) == 1
+    assert evaluated_writes[0][0]["job_id"] == "controls_engineer__test123456"
+    assert "ranking" not in evaluated_writes[0][0]
+    assert len(match_writes) == 1
+    assert match_writes[0][0]["job_id"] == "controls_engineer__test123456"
+    assert match_writes[0][0]["ranking"]["candidate_id"] == "Ibrahim_Saad_CV"
     assert len(ranking_writes) == 1
     assert ranking_writes[0][0]["job_id"] == "controls_engineer__test123456"
     assert ranking_writes[0][0]["candidate_id"] == "Ibrahim_Saad_CV"
@@ -354,7 +495,8 @@ def test_fetch_source_jobs_writes_rankings_by_default(monkeypatch) -> None:
         ),
     ]
     assert browser.context.closed is True
-    assert messages[:2] == ["fetch progress: [1/2]", "fetch progress: [2/2]"]
+    assert messages[0] == "fetch progress: [1/2]"
+    assert "fetch progress: [2/2]" in messages
     assert any(message.startswith("RANK [1] 'Controls Engineer' | score=0.910") for message in messages)
     assert messages[-1] == "closing browser after fetching 1 jobs"
 
@@ -376,6 +518,7 @@ def test_fetch_source_jobs_writes_requested_debug_artifacts(monkeypatch) -> None
     browser = FakeBrowser()
     raw_writes: list[dict[str, object]] = []
     evaluated_writes: list[dict[str, object]] = []
+    match_writes: list[dict[str, object]] = []
     ranking_writes: list[dict[str, object]] = []
 
     _patch_ranker(monkeypatch)
@@ -388,6 +531,11 @@ def test_fetch_source_jobs_writes_requested_debug_artifacts(monkeypatch) -> None
         job_hunter.report_writer,
         "write_evaluated_job",
         lambda payload, **_: evaluated_writes.append(payload),
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_match_job",
+        lambda payload, **_: match_writes.append(payload),
     )
     monkeypatch.setattr(
         job_hunter.report_writer,
@@ -408,7 +556,10 @@ def test_fetch_source_jobs_writes_requested_debug_artifacts(monkeypatch) -> None
     assert raw_writes[0]["url"] == "https://example.com/jobs/controls"
     assert len(evaluated_writes) == 1
     assert evaluated_writes[0]["job_id"] == "controls_engineer__test123456"
-    assert evaluated_writes[0]["ranking"]["candidate_id"] == "Ibrahim_Saad_CV"
+    assert "ranking" not in evaluated_writes[0]
+    assert len(match_writes) == 1
+    assert match_writes[0]["job_id"] == "controls_engineer__test123456"
+    assert match_writes[0]["ranking"]["candidate_id"] == "Ibrahim_Saad_CV"
     assert len(ranking_writes) == 1
     assert ranking_writes[0]["job_id"] == "controls_engineer__test123456"
     assert ranking_writes[0]["candidate_id"] == "Ibrahim_Saad_CV"
@@ -432,6 +583,16 @@ def test_fetch_source_jobs_passes_job_limit_to_adapter(monkeypatch) -> None:
     browser = FakeBrowser()
 
     _patch_ranker(monkeypatch)
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_evaluated_job",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_match_job",
+        lambda *_args, **_kwargs: None,
+    )
     monkeypatch.setattr(
         job_hunter.report_writer,
         "write_ranking_result",
@@ -471,6 +632,16 @@ def test_fetch_source_jobs_continues_after_single_job_failure(monkeypatch) -> No
 
     monkeypatch.setattr(job_hunter, "log", messages.append)
     _patch_ranker(monkeypatch)
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_evaluated_job",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_match_job",
+        lambda *_args, **_kwargs: None,
+    )
     monkeypatch.setattr(
         job_hunter.report_writer,
         "write_ranking_result",
@@ -519,6 +690,16 @@ def test_fetch_source_jobs_writes_validation_when_enabled(monkeypatch) -> None:
         lambda report, *, company_slug, log_message: validation_writes.append(
             (report, company_slug, log_message)
         ),
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_evaluated_job",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_match_job",
+        lambda *_args, **_kwargs: None,
     )
     monkeypatch.setattr(
         job_hunter.report_writer,
@@ -593,7 +774,7 @@ def test_main_loads_candidate_profile_and_logs_summary(monkeypatch) -> None:
     monkeypatch.setattr(
         job_hunter,
         "load_candidate_profile",
-        lambda path: candidate_profile,
+        lambda path, *, log_message=None: candidate_profile,
     )
     monkeypatch.setattr(
         job_hunter,
@@ -647,7 +828,7 @@ def test_main_passes_validation_flag(monkeypatch) -> None:
     monkeypatch.setattr(
         job_hunter,
         "load_candidate_profile",
-        lambda path: candidate_profile,
+        lambda path, *, log_message=None: candidate_profile,
     )
     monkeypatch.setattr(
         job_hunter,
@@ -696,7 +877,7 @@ def test_main_passes_debug_output_flags(monkeypatch) -> None:
     monkeypatch.setattr(
         job_hunter,
         "load_candidate_profile",
-        lambda path: candidate_profile,
+        lambda path, *, log_message=None: candidate_profile,
     )
     monkeypatch.setattr(
         job_hunter,
@@ -753,7 +934,7 @@ def test_main_passes_job_limit_flag(monkeypatch) -> None:
     monkeypatch.setattr(
         job_hunter,
         "load_candidate_profile",
-        lambda path: candidate_profile,
+        lambda path, *, log_message=None: candidate_profile,
     )
     monkeypatch.setattr(
         job_hunter,

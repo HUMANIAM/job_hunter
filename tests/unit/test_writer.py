@@ -8,10 +8,16 @@ def test_sioux_output_paths_use_job_profiles_directory() -> None:
     expected_dir = Path("data/job_profiles/sioux")
 
     assert output_writer.OUTPUT_DIR == expected_dir
+    assert output_writer.job_profile_output_path_for(
+        "sioux",
+        "Controls Engineer",
+        "https://example.com/controls",
+    ).parent == expected_dir / "evaluated"
     assert output_writer.RAW_OUTPUT_DIR == expected_dir / "raw"
     assert output_writer.EVALUATED_OUTPUT_DIR == expected_dir / "evaluated"
     assert output_writer.MATCH_OUTPUT_DIR == expected_dir / "match"
     assert output_writer.RANKING_OUTPUT_DIR == Path("data/rankings")
+    assert output_writer.CANDIDATE_PROFILE_OUTPUT_DIR == Path("data/candidate_profiles")
     assert (
         output_writer.VALIDATION_OUTPUT_PATH
         == expected_dir / "jobs_sioux_validation.json"
@@ -97,6 +103,20 @@ def test_write_raw_job_writes_expected_payload(tmp_path: Path, monkeypatch) -> N
         assert json.load(file_handle) == payload
 
 
+def test_write_job_profile_writes_expected_payload(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(output_writer, "BASE_OUTPUT_DIR", tmp_path / "profiles")
+
+    payload = {"title": "Controls Engineer", "url": "https://example.com/controls"}
+    output_path = output_writer.write_job_profile(payload)
+
+    assert output_path.parent == tmp_path / "profiles" / "sioux" / "evaluated"
+    with output_path.open("r", encoding="utf-8") as file_handle:
+        assert json.load(file_handle) == payload
+
+
 def test_write_evaluated_job_writes_expected_payload(
     tmp_path: Path,
     monkeypatch,
@@ -155,5 +175,52 @@ def test_write_ranking_result_writes_expected_payload(
         / "rankings"
         / "Ibrahim_Saad_CV_embedded_software_engineer__12345abcde.json"
     )
+    with output_path.open("r", encoding="utf-8") as file_handle:
+        assert json.load(file_handle) == payload
+
+
+def test_write_candidate_profile_writes_expected_payload(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        output_writer,
+        "BASE_CANDIDATE_PROFILE_DIR",
+        tmp_path / "candidate_profiles",
+    )
+
+    payload = {
+        "candidate_id": "Ibrahim_Saad_CV",
+        "source_text_hash": "3a01ac116f682c78fdd0704ed2774349959633d1a81647b79ecd1c396f6443d1",
+        "schema_version": "2.0.0",
+        "profile": {
+            "skills": [],
+            "languages": [],
+            "protocols": [],
+            "standards": [],
+            "domains": [],
+            "seniority": {"value": None, "confidence": 0.0, "evidence": []},
+            "years_experience_total": {
+                "value": None,
+                "confidence": 0.0,
+                "evidence": [],
+            },
+            "candidate_constraints": {
+                "preferred_locations": [],
+                "excluded_locations": [],
+                "preferred_workplace_types": [],
+                "excluded_workplace_types": [],
+                "requires_visa_sponsorship": None,
+                "avoid_export_control_roles": None,
+                "notes": [],
+                "confidence": 0.0,
+                "evidence": [],
+            },
+        },
+    }
+
+    output_path = output_writer.write_candidate_profile(payload)
+
+    assert output_path == tmp_path / "candidate_profiles" / "Ibrahim_Saad_CV.json"
     with output_path.open("r", encoding="utf-8") as file_handle:
         assert json.load(file_handle) == payload

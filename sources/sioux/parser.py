@@ -649,6 +649,17 @@ def _build_years_experience_requirement(
     )
 
 
+def _summarize_years_experience(
+    value: SiouxJobYearsExperienceRequirement,
+) -> str:
+    return (
+        f"min_years={value.min_years!r}, "
+        f"max_years={value.max_years!r}, "
+        f"level={value.requirement_level!r}, "
+        f"source={value.source_kind!r}"
+    )
+
+
 def extract_recruiter_fields(
     description_text: str,
 ) -> tuple[str | None, str | None, str | None, str | None]:
@@ -838,7 +849,7 @@ def fetch_job(
         f"disciplines={job.disciplines}, "
         f"location='{job.location}', "
         f"employment='{job.fulltime_parttime}', "
-        f"years_experience={job.years_experience_requirement}, "
+        f"years_experience=({_summarize_years_experience(job.years_experience_requirement)}), "
         f"languages={len(job.languages)}, "
         f"protocols={len(job.protocols)}, "
         f"standards={len(job.standards)}, "

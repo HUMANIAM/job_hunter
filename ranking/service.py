@@ -13,6 +13,47 @@ class RankingBatchResult:
     ranked_jobs: list[Any]
 
 
+def _log_ranking(
+    job: Any,
+    ranking: RankingResult,
+    *,
+    index: int | None = None,
+    log_message: Callable[[str], None] | None = None,
+) -> None:
+    if log_message is None:
+        return
+
+    rank_prefix = f"RANK [{index}] " if index is not None else "RANK "
+    log_message(
+        f"{rank_prefix}'{job.title}' | "
+        f"score={ranking.score:.3f} | "
+        f"skills={ranking.bucket_scores.skills:.3f} | "
+        f"languages={ranking.bucket_scores.languages:.3f} | "
+        f"protocols={ranking.bucket_scores.protocols:.3f} | "
+        f"standards={ranking.bucket_scores.standards:.3f} | "
+        f"domains={ranking.bucket_scores.domains:.3f} | "
+        f"seniority={ranking.bucket_scores.seniority:.3f} | "
+        f"years_experience={ranking.bucket_scores.years_experience:.3f}"
+    )
+
+
+def rank_job(
+    candidate_profile: Any,
+    job: Any,
+    *,
+    index: int | None = None,
+    log_message: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    ranking = evaluate_job_match(candidate_profile, job)
+    _log_ranking(
+        job,
+        ranking,
+        index=index,
+        log_message=log_message,
+    )
+    return asdict(ranking)
+
+
 def rank_jobs(
     candidate_profile: Any,
     jobs: Sequence[Any],
@@ -25,19 +66,12 @@ def rank_jobs(
     for idx, job in enumerate(jobs, start=1):
         ranking = evaluate_job_match(candidate_profile, job)
         ranked.append((job, ranking))
-
-        if log_message is not None:
-            log_message(
-                f"RANK [{idx}] '{job.title}' | "
-                f"score={ranking.score:.3f} | "
-                f"skills={ranking.bucket_scores.skills:.3f} | "
-                f"languages={ranking.bucket_scores.languages:.3f} | "
-                f"protocols={ranking.bucket_scores.protocols:.3f} | "
-                f"standards={ranking.bucket_scores.standards:.3f} | "
-                f"domains={ranking.bucket_scores.domains:.3f} | "
-                f"seniority={ranking.bucket_scores.seniority:.3f} | "
-                f"years_experience={ranking.bucket_scores.years_experience:.3f}"
-            )
+        _log_ranking(
+            job,
+            ranking,
+            index=idx,
+            log_message=log_message,
+        )
 
     ranked.sort(key=lambda item: item[1].score, reverse=True)
 

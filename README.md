@@ -10,8 +10,9 @@ The project is currently in active experimentation with Sioux vacancies. The scr
 
 Today the project already includes:
 - a Playwright-based vacancy scraper
-- per-job ranking results against a candidate profile
-- optional raw, evaluated, and validation JSON artifacts
+- candidate-profile reuse or extraction from a CV source file
+- per-job evaluated job profiles, match artifacts, and ranking results
+- optional raw and validation JSON artifacts
 - a collection validation step that compares facet-based collection with unfiltered pagination collection
 
 ## Local Development
@@ -58,6 +59,14 @@ Use a specific candidate profile:
   --cv data/candidate_profiles/Ibrahim_Saad_CV.json
 ```
 
+Build or refresh the candidate profile from a CV source file:
+
+```bash
+.venv/bin/python app/job_hunter.py \
+  --company sioux \
+  --cv data/candidate_profiles/Ibrahim_Saad_CV.md
+```
+
 Write all optional debug artifacts as well:
 
 ```bash
@@ -71,23 +80,31 @@ Write all optional debug artifacts as well:
 ### CLI Options
 
 - `--company <slug>`: source/company slug to fetch. Defaults to `sioux`.
-- `--candidate-profile <path>` / `--cv <path>`: candidate profile JSON used for ranking.
-- `--write-raw`: write per-job raw collected job artifacts.
-- `--write-evaluated`: write per-job evaluated job artifacts with embedded ranking metadata.
+- `--candidate-profile <path>` / `--cv <path>`: candidate profile JSON or CV source file used for ranking. Non-JSON inputs are extracted once and persisted under `data/candidate_profiles/`.
+- evaluated job profiles are always written under `data/job_profiles/<company>/evaluated/`.
+- match artifacts are always written under `data/job_profiles/<company>/match/`.
+- `--write-raw`: also write per-job raw artifacts under `data/job_profiles/<company>/raw/`.
+- `--write-evaluated`: deprecated compatibility flag; evaluated and match artifacts are already written by default.
 - `--write-validation`: write the collection validation artifact.
 
 ## Output Files
 
+Candidate profiles are written under `data/candidate_profiles/`.
+
+- `<candidate_id>.json`: reusable extracted candidate profile.
+
+Job profiles are written under `data/job_profiles/<company>/`.
+
+- `evaluated/<job_title>__<url_hash>.json`: one evaluated job profile per extracted vacancy, written before ranking.
+- `match/<job_title>__<url_hash>.json`: the same job payload plus embedded ranking metadata, written immediately after ranking.
+
 Ranking files are written under `data/rankings/`.
 
-- `<candidate_id>_<job_id>.json`: one ranking result per extracted job.
-
-Additional source artifacts are written under `data/job_profiles/<company>/`.
+- `<candidate_id>_<job_id>.json`: one ranking result per extracted job, written immediately after that job is ranked.
 
 Optional files:
 
-- `raw/<job_title>__<url_hash>.json`: final merged job payload written as soon as extraction completes for a job.
-- `evaluated/<job_title>__<url_hash>.json`: the same job payload plus embedded ranking metadata, written immediately after ranking.
+- `raw/<job_title>__<url_hash>.json`: raw per-job artifact for debugging.
 - `jobs_<company>_validation.json`: collection validation report from the adapter.
 
 ## Repository Policy
