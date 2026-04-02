@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ranking.evaluator import evaluate_job_match
-from ranking.service import rank_jobs
+from ranking.service import rank_job, rank_jobs
 
 
 @dataclass
@@ -121,6 +121,16 @@ def test_evaluate_job_match_uses_stable_ids() -> None:
 
     assert result.job_id == "embedded_engineer__1234567890"
     assert result.candidate_id == "candidate_abc123"
+
+
+def test_rank_job_preserves_id_fields() -> None:
+    result = rank_job(
+        _candidate_document(),
+        _job_document("embedded_engineer__1234567890", "Embedded Engineer", "python"),
+    )
+
+    assert result["job_id"] == "embedded_engineer__1234567890"
+    assert result["candidate_id"] == "candidate_abc123"
 
 
 def test_rank_jobs_sorts_results_and_preserves_id_fields() -> None:
