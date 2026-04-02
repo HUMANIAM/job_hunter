@@ -18,6 +18,11 @@ from shared.llm import (
     render_template,
     require_env_value,
 )
+from shared.normalizer import (
+    normalize_and_dedupe_texts,
+    normalize_taxonomy_name,
+    normalize_text,
+)
 
 DEFAULT_CANDIDATE_PROFILE_LLM_MODEL = "gpt-5.4-mini"
 DEFAULT_CANDIDATE_PROFILE_MAX_COMPLETION_TOKENS = 3000
@@ -41,38 +46,10 @@ _STRENGTH_RANK = {
     "core": 3,
 }
 
-
-def _clean_text(value: str) -> str:
-    return " ".join(value.split()).strip()
-
-
-def _dedupe_and_strip(values: Iterable[str]) -> List[str]:
-    cleaned_values: List[str] = []
-    seen_values: set[str] = set()
-
-    for value in values:
-        normalized = _clean_text(value)
-        if not normalized:
-            continue
-
-        key = normalized.casefold()
-        if key in seen_values:
-            continue
-
-        cleaned_values.append(normalized)
-        seen_values.add(key)
-
-    return cleaned_values
-
-
-def _normalize_taxonomy_name(value: str) -> str:
-    return _clean_text(value).lower()
-
-
 def _clean_confidence_score(value: Any) -> float:
     parsed_value = value
     if isinstance(parsed_value, str):
-        normalized = _clean_text(parsed_value)
+        normalized = normalize_text(parsed_value)
         if not normalized:
             raise ValueError("confidence must not be empty")
         try:
@@ -93,7 +70,7 @@ def _merge_evidence(*groups: Iterable[str]) -> List[str]:
     merged: List[str] = []
     for group in groups:
         merged.extend(group)
-    return _dedupe_and_strip(merged)
+    return normalize_and_dedupe_texts(merged)
 
 
 def compute_source_text_hash(profile_text: str) -> str:
@@ -114,7 +91,7 @@ class CandidateProfileEvidenceBackedItem(BaseModel):
     @field_validator("evidence", mode="after")
     @classmethod
     def clean_evidence(cls, values: List[str]) -> List[str]:
-        return _dedupe_and_strip(values)
+        return normalize_and_dedupe_texts(values)
 
 
 class CandidateProfileFeatureItem(CandidateProfileEvidenceBackedItem):
@@ -124,7 +101,7 @@ class CandidateProfileFeatureItem(CandidateProfileEvidenceBackedItem):
     @field_validator("name", mode="before")
     @classmethod
     def clean_name(cls, value: str) -> str:
-        normalized = _normalize_taxonomy_name(value)
+        normalized = normalize_taxonomy_name(value)
         if not normalized:
             raise ValueError("name must not be empty")
         return normalized
@@ -152,7 +129,7 @@ class CandidateProfileLanguageItem(CandidateProfileEvidenceBackedItem):
     @field_validator("name", mode="before")
     @classmethod
     def clean_name(cls, value: str) -> str:
-        normalized = _normalize_taxonomy_name(value)
+        normalized = normalize_taxonomy_name(value)
         if not normalized:
             raise ValueError("name must not be empty")
         return normalized
@@ -163,7 +140,7 @@ class CandidateProfileLanguageItem(CandidateProfileEvidenceBackedItem):
         if value is None:
             return None
 
-        normalized = _normalize_taxonomy_name(value)
+        normalized = normalize_taxonomy_name(value)
         return normalized or None
 
     @model_validator(mode="after")
@@ -182,7 +159,7 @@ class CandidateProfileSeniorityItem(CandidateProfileEvidenceBackedItem):
         if value is None:
             return None
 
-        normalized = _normalize_taxonomy_name(value)
+        normalized = normalize_taxonomy_name(value)
         return normalized or None
 
     @model_validator(mode="after")
@@ -230,7 +207,7 @@ class CandidateProfileCandidateConstraints(CandidateProfileEvidenceBackedItem):
     )
     @classmethod
     def clean_list_fields(cls, values: List[str]) -> List[str]:
-        return _dedupe_and_strip(values)
+        return normalize_and_dedupe_texts(values)
 
     @model_validator(mode="after")
     def validate_item(self) -> "CandidateProfileCandidateConstraints":
@@ -331,7 +308,7 @@ class CandidateProfileDocument(BaseModel):
     @field_validator("source_text_hash")
     @classmethod
     def validate_source_text_hash(cls, value: str) -> str:
-        normalized = _clean_text(value)
+        normalized = normalize_text(value)
         if len(normalized) != 64:
             raise ValueError("source_text_hash must be a sha256 hex digest")
         return normalized
@@ -339,7 +316,7 @@ class CandidateProfileDocument(BaseModel):
     @field_validator("schema_version")
     @classmethod
     def validate_schema_version(cls, value: str) -> str:
-        normalized = _clean_text(value)
+        normalized = normalize_text(value)
         if not normalized:
             raise ValueError("schema_version must not be empty")
         return normalized
