@@ -50,6 +50,53 @@ def test_render_llm_user_message_serializes_nullable_context() -> None:
     assert "Generic systems role without explicit technical details." in rendered
 
 
+def test_sioux_llm_payload_normalizes_fields() -> None:
+    payload = SiouxLlmExtractionPayload.model_validate(
+        {
+            "skills": [
+                {
+                    "name": "  C++  ",
+                    "requirement_level": " Required ",
+                    "confidence": " 0.96 ",
+                    "evidence": [" Experience with C++ "],
+                }
+            ],
+            "languages": [
+                {
+                    "name": " English ",
+                    "requirement_level": " preferred ",
+                    "confidence": 0.74,
+                    "evidence": ["Fluent in English"],
+                }
+            ],
+            "protocols": [],
+            "standards": [],
+            "domains": [],
+            "seniority": {
+                "value": " Senior ",
+                "confidence": 0.91,
+                "evidence": ["Senior embedded role"],
+            },
+            "restrictions": [
+                {
+                    "value": " EU Work Authorization ",
+                    "confidence": 0.82,
+                    "evidence": ["Must already have EU work authorization"],
+                }
+            ],
+        }
+    )
+
+    assert payload.skills[0].name == "c++"
+    assert payload.skills[0].requirement_level == "required"
+    assert payload.skills[0].confidence == 0.96
+    assert payload.skills[0].evidence == ["Experience with C++"]
+    assert payload.languages[0].name == "english"
+    assert payload.languages[0].requirement_level == "preferred"
+    assert payload.seniority.value == "senior"
+    assert payload.restrictions[0].value == "eu work authorization"
+
+
 def test_fetch_job_combines_deterministic_and_llm_fields() -> None:
     deterministic_job = sioux_parser.SiouxJobDeterministic(
         title="Embedded Software Engineer",

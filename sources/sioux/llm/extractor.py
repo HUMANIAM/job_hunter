@@ -18,6 +18,11 @@ from shared.llm import (
     require_env_value,
     resolve_json_schema_node,
 )
+from shared.normalizer import (
+    normalize_and_dedupe_texts,
+    normalize_taxonomy_name,
+    normalize_text,
+)
 
 DEFAULT_SIOUX_LLM_MODEL = "gpt-4.1-mini"
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "jobs_sioux.schema.json"
@@ -36,19 +41,10 @@ REQUIREMENT_LEVEL_RANK = {
     "required": 1,
 }
 
-
-def _clean_text(value: str) -> str:
-    return " ".join(value.split()).strip()
-
-
-def _normalize_taxonomy_name(value: str) -> str:
-    return _clean_text(value).lower()
-
-
 def _clean_confidence_score(value: Any) -> float:
     parsed_value = value
     if isinstance(parsed_value, str):
-        normalized = _clean_text(parsed_value)
+        normalized = normalize_text(parsed_value)
         if not normalized:
             raise ValueError("confidence must not be empty")
         try:
@@ -65,30 +61,11 @@ def _clean_confidence_score(value: Any) -> float:
     return round(confidence, 4)
 
 
-def _dedupe_and_strip(values: Iterable[str]) -> List[str]:
-    cleaned_values: List[str] = []
-    seen_values: set[str] = set()
-
-    for value in values:
-        normalized = _clean_text(value)
-        if not normalized:
-            continue
-
-        key = normalized.casefold()
-        if key in seen_values:
-            continue
-
-        cleaned_values.append(normalized)
-        seen_values.add(key)
-
-    return cleaned_values
-
-
 def _merge_evidence(*groups: Iterable[str]) -> List[str]:
     merged: List[str] = []
     for group in groups:
         merged.extend(group)
-    return _dedupe_and_strip(merged)
+    return normalize_and_dedupe_texts(merged)
 
 
 class SiouxLlmEvidenceBackedItem(BaseModel):
@@ -105,7 +82,7 @@ class SiouxLlmEvidenceBackedItem(BaseModel):
     @field_validator("evidence", mode="after")
     @classmethod
     def clean_evidence(cls, values: List[str]) -> List[str]:
-        return _dedupe_and_strip(values)
+        return normalize_and_dedupe_texts(values)
 
 
 class SiouxLlmFeatureItem(SiouxLlmEvidenceBackedItem):
@@ -115,7 +92,7 @@ class SiouxLlmFeatureItem(SiouxLlmEvidenceBackedItem):
     @field_validator("name", mode="before")
     @classmethod
     def clean_name(cls, value: str) -> str:
-        normalized = _normalize_taxonomy_name(value)
+        normalized = normalize_taxonomy_name(value)
         if not normalized:
             raise ValueError("name must not be empty")
         return normalized
@@ -123,7 +100,7 @@ class SiouxLlmFeatureItem(SiouxLlmEvidenceBackedItem):
     @field_validator("requirement_level", mode="before")
     @classmethod
     def clean_requirement_level(cls, value: str) -> str:
-        normalized = _normalize_taxonomy_name(value)
+        normalized = normalize_taxonomy_name(value)
         if normalized not in REQUIREMENT_LEVEL_RANK:
             raise ValueError("requirement_level must be 'required' or 'preferred'")
         return normalized
@@ -141,7 +118,7 @@ class SiouxLlmRestrictionItem(SiouxLlmEvidenceBackedItem):
     @field_validator("value", mode="before")
     @classmethod
     def clean_value(cls, value: str) -> str:
-        normalized = _normalize_taxonomy_name(value)
+        normalized = normalize_taxonomy_name(value)
         if not normalized:
             raise ValueError("value must not be empty")
         return normalized
@@ -162,7 +139,7 @@ class SiouxLlmSeniorityItem(SiouxLlmEvidenceBackedItem):
         if value is None:
             return None
 
-        normalized = _normalize_taxonomy_name(value)
+        normalized = normalize_taxonomy_name(value)
         return normalized or None
 
     @model_validator(mode="after")
