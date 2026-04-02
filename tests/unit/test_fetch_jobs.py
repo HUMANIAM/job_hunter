@@ -6,11 +6,24 @@ from ranking import evaluator as ranking_evaluator
 
 
 @dataclass
+class FakeStructuredFeature:
+    name: str
+    requirement_level: str
+
+
+@dataclass
+class FakeStructuredRestriction:
+    value: str
+
+
+@dataclass
 class FakeJob:
     title: str | None
     description_text: str | None
+    languages: list[object] | None = None
     required_languages: list[str] | None = None
-    restrictions: list[str] | None = None
+    restrictions: list[object] | None = None
+    years_experience_requirement: object | None = None
     min_years_experience: int | None = None
 
 
@@ -82,7 +95,9 @@ def test_evaluate_job_skips_excluded_job_type_before_keyword_matching() -> None:
     assert evaluation["description_hits"] == []
 
 
-def test_evaluate_job_skips_excluded_required_language_before_keyword_matching() -> None:
+def test_evaluate_job_skips_excluded_required_language_before_keyword_matching() -> (
+    None
+):
     job = FakeJob(
         title="Embedded Software Engineer",
         description_text="Python and Linux work on machine learning systems.",
@@ -96,6 +111,25 @@ def test_evaluate_job_skips_excluded_required_language_before_keyword_matching()
     assert evaluation["skip_hits"] == ["required_language:dutch"]
     assert evaluation["title_hits"] == []
     assert evaluation["description_hits"] == []
+
+
+def test_evaluate_job_skips_excluded_required_language_from_structured_languages() -> (
+    None
+):
+    job = FakeJob(
+        title="Embedded Software Engineer",
+        description_text="Python and Linux work on machine learning systems.",
+        languages=[
+            FakeStructuredFeature(name="english", requirement_level="required"),
+            FakeStructuredFeature(name="dutch", requirement_level="required"),
+        ],
+    )
+
+    evaluation = ranking_evaluator.evaluate_job(job)
+
+    assert evaluation["decision"] == "skip"
+    assert evaluation["reason"] == "hard_filter_required_language"
+    assert evaluation["skip_hits"] == ["required_language:dutch"]
 
 
 def test_evaluate_job_skips_when_min_years_experience_exceeds_limit() -> None:
@@ -114,6 +148,26 @@ def test_evaluate_job_skips_when_min_years_experience_exceeds_limit() -> None:
     assert evaluation["description_hits"] == []
 
 
+def test_evaluate_job_skips_when_structured_min_years_experience_exceeds_limit() -> (
+    None
+):
+    @dataclass
+    class FakeYearsRequirement:
+        min_years: int | None
+
+    job = FakeJob(
+        title="Embedded Software Engineer",
+        description_text="Python and Linux work on machine learning systems.",
+        years_experience_requirement=FakeYearsRequirement(min_years=8),
+    )
+
+    evaluation = ranking_evaluator.evaluate_job(job)
+
+    assert evaluation["decision"] == "skip"
+    assert evaluation["reason"] == "hard_filter_min_years_experience"
+    assert evaluation["skip_hits"] == ["min_years_experience:8"]
+
+
 def test_evaluate_job_skips_export_control_clearance_restriction() -> None:
     job = FakeJob(
         title="Embedded Software Engineer",
@@ -130,6 +184,24 @@ def test_evaluate_job_skips_export_control_clearance_restriction() -> None:
     ]
     assert evaluation["title_hits"] == []
     assert evaluation["description_hits"] == []
+
+
+def test_evaluate_job_skips_structured_export_control_clearance_restriction() -> None:
+    job = FakeJob(
+        title="Embedded Software Engineer",
+        description_text="Python and Linux work on machine learning systems.",
+        restrictions=[
+            FakeStructuredRestriction(value="eligible for Dutch security clearance")
+        ],
+    )
+
+    evaluation = ranking_evaluator.evaluate_job(job)
+
+    assert evaluation["decision"] == "skip"
+    assert evaluation["reason"] == "hard_filter_export_control_clearance"
+    assert evaluation["skip_hits"] == [
+        "restriction:export_control_or_security_clearance"
+    ]
 
 
 def test_evaluate_job_rejects_low_signal_description_only_match() -> None:

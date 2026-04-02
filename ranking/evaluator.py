@@ -8,8 +8,10 @@ from typing import Iterable, Protocol
 class EvaluatableJob(Protocol):
     title: str | None
     description_text: str | None
+    languages: list[object] | None
     required_languages: list[str] | None
-    restrictions: list[str] | None
+    restrictions: list[object] | None
+    years_experience_requirement: object | None
     min_years_experience: int | None
 
 
@@ -85,6 +87,7 @@ def compile_keyword_patterns(keywords: Iterable[str]) -> tuple[re.Pattern[str], 
         patterns.append(re.compile(rf"(?<![a-z0-9]){escaped}(?![a-z0-9])"))
     return tuple(patterns)
 
+
 KEEP_PATTERNS = compile_keyword_patterns(KEEP_KEYWORDS)
 
 
@@ -118,6 +121,57 @@ def has_export_control_or_clearance_restriction(restrictions: Iterable[str]) -> 
     )
 
 
+def _get_field(value: object, field_name: str) -> object | None:
+    if isinstance(value, dict):
+        return value.get(field_name)
+    return getattr(value, field_name, None)
+
+
+def _required_languages(job: EvaluatableJob) -> list[str]:
+    languages = getattr(job, "languages", None)
+    if languages is not None:
+        extracted_languages: list[str] = []
+        for language in languages:
+            if _get_field(language, "requirement_level") != "required":
+                continue
+            name = _get_field(language, "name")
+            if isinstance(name, str):
+                extracted_languages.append(name.lower())
+        return extracted_languages
+
+    return [
+        language.lower()
+        for language in (getattr(job, "required_languages", None) or [])
+    ]
+
+
+def _restriction_values(job: EvaluatableJob) -> list[str]:
+    raw_restrictions = getattr(job, "restrictions", None) or []
+    values: list[str] = []
+    for restriction in raw_restrictions:
+        if isinstance(restriction, str):
+            values.append(restriction)
+            continue
+
+        value = _get_field(restriction, "value")
+        if isinstance(value, str):
+            values.append(value)
+    return values
+
+
+def _min_years_experience(job: EvaluatableJob) -> int | None:
+    years_requirement = getattr(job, "years_experience_requirement", None)
+    if years_requirement is not None:
+        min_years = _get_field(years_requirement, "min_years")
+        if isinstance(min_years, int) or min_years is None:
+            return min_years
+
+    legacy_value = getattr(job, "min_years_experience", None)
+    return (
+        legacy_value if isinstance(legacy_value, int) or legacy_value is None else None
+    )
+
+
 def evaluate_hard_filters(
     job: EvaluatableJob,
     policy: HardFilterPolicy = DEFAULT_HARD_FILTER_POLICY,
@@ -137,23 +191,21 @@ def evaluate_hard_filters(
             "description_hits": [],
         }
 
-    required_languages = [
-        language.lower()
-        for language in (getattr(job, "required_languages", None) or [])
-    ]
     matched_languages = sorted(
-        set(required_languages) & policy.excluded_required_languages
+        set(_required_languages(job)) & policy.excluded_required_languages
     )
     if matched_languages:
         return {
             "decision": "skip",
             "reason": "hard_filter_required_language",
-            "skip_hits": [f"required_language:{language}" for language in matched_languages],
+            "skip_hits": [
+                f"required_language:{language}" for language in matched_languages
+            ],
             "title_hits": [],
             "description_hits": [],
         }
 
-    restrictions = getattr(job, "restrictions", None) or []
+    restrictions = _restriction_values(job)
     if (
         policy.require_export_control_clearance_absent
         and has_export_control_or_clearance_restriction(restrictions)
@@ -166,7 +218,7 @@ def evaluate_hard_filters(
             "description_hits": [],
         }
 
-    min_years_experience = getattr(job, "min_years_experience", None)
+    min_years_experience = _min_years_experience(job)
     if (
         policy.max_min_years_experience is not None
         and min_years_experience is not None

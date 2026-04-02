@@ -41,8 +41,10 @@ def test_render_llm_user_message_serializes_nullable_context() -> None:
     assert '"client_site_required": null' in rendered
     assert '"disciplines": [' in rendered
     assert '"Controls"' in rendered
+    assert '"requirement_level": "required | preferred"' in rendered
+    assert '"seniority": {' in rendered
     assert (
-        '"seniority_hint": "junior | medior | senior | lead | principal | staff | null"'
+        '"value": "junior | medior | senior | lead | principal | staff | null"'
         in rendered
     )
     assert "Generic systems role without explicit technical details." in rendered
@@ -85,32 +87,94 @@ def test_fetch_job_combines_deterministic_and_llm_fields() -> None:
             assert job == deterministic_job
             return SiouxLlmExtractionPayload.model_validate(
                 {
-                    "required_skills": ["c++", "embedded linux"],
-                    "preferred_skills": ["qt"],
-                    "required_languages": ["english"],
-                    "preferred_languages": ["dutch"],
-                    "required_protocols": ["can"],
-                    "preferred_protocols": ["ethercat"],
-                    "required_standards": ["iec 61508"],
-                    "preferred_standards": ["misra"],
-                    "required_domains": ["semiconductor"],
-                    "preferred_domains": ["medical devices"],
-                    "seniority_hint": "senior",
-                    "restrictions": ["eu work authorization"],
-                    "evidence": {
-                        "required_skills": ["experience with C++ and Embedded Linux"],
-                        "preferred_skills": ["Qt is a plus"],
-                        "required_languages": ["fluent in English"],
-                        "preferred_languages": ["Dutch is a plus"],
-                        "required_protocols": ["knowledge of CAN"],
-                        "preferred_protocols": ["EtherCAT is a plus"],
-                        "required_standards": ["IEC 61508"],
-                        "preferred_standards": ["MISRA is a plus"],
-                        "required_domains": ["semiconductor systems"],
-                        "preferred_domains": ["medical devices is a plus"],
-                        "seniority_hint": ["Senior embedded software engineer"],
-                        "restrictions": ["must already have EU work authorization"],
+                    "skills": [
+                        {
+                            "name": "c++",
+                            "requirement_level": "required",
+                            "confidence": 0.96,
+                            "evidence": ["experience with C++ and Embedded Linux"],
+                        },
+                        {
+                            "name": "embedded linux",
+                            "requirement_level": "required",
+                            "confidence": 0.95,
+                            "evidence": ["experience with C++ and Embedded Linux"],
+                        },
+                        {
+                            "name": "qt",
+                            "requirement_level": "preferred",
+                            "confidence": 0.82,
+                            "evidence": ["Qt is a plus"],
+                        },
+                    ],
+                    "languages": [
+                        {
+                            "name": "english",
+                            "requirement_level": "required",
+                            "confidence": 0.94,
+                            "evidence": ["fluent in English"],
+                        },
+                        {
+                            "name": "dutch",
+                            "requirement_level": "preferred",
+                            "confidence": 0.74,
+                            "evidence": ["Dutch is a plus"],
+                        },
+                    ],
+                    "protocols": [
+                        {
+                            "name": "can",
+                            "requirement_level": "required",
+                            "confidence": 0.91,
+                            "evidence": ["knowledge of CAN"],
+                        },
+                        {
+                            "name": "ethercat",
+                            "requirement_level": "preferred",
+                            "confidence": 0.76,
+                            "evidence": ["EtherCAT is a plus"],
+                        },
+                    ],
+                    "standards": [
+                        {
+                            "name": "iec 61508",
+                            "requirement_level": "required",
+                            "confidence": 0.9,
+                            "evidence": ["IEC 61508"],
+                        },
+                        {
+                            "name": "misra",
+                            "requirement_level": "preferred",
+                            "confidence": 0.8,
+                            "evidence": ["MISRA is a plus"],
+                        },
+                    ],
+                    "domains": [
+                        {
+                            "name": "semiconductor",
+                            "requirement_level": "required",
+                            "confidence": 0.88,
+                            "evidence": ["semiconductor systems"],
+                        },
+                        {
+                            "name": "medical devices",
+                            "requirement_level": "preferred",
+                            "confidence": 0.77,
+                            "evidence": ["medical devices is a plus"],
+                        },
+                    ],
+                    "seniority": {
+                        "value": "senior",
+                        "confidence": 0.93,
+                        "evidence": ["Senior embedded software engineer"],
                     },
+                    "restrictions": [
+                        {
+                            "value": "eu work authorization",
+                            "confidence": 0.95,
+                            "evidence": ["must already have EU work authorization"],
+                        }
+                    ],
                 }
             )
 
@@ -136,20 +200,104 @@ def test_fetch_job_combines_deterministic_and_llm_fields() -> None:
         location="Eindhoven",
         team="Embedded Systems",
         work_experience="Senior",
-        min_years_experience=5,
-        max_years_experience=None,
-        experience_text="At least 5 years of experience in embedded software.",
+        years_experience_requirement=sioux_parser.SiouxJobYearsExperienceRequirement(
+            min_years=5,
+            max_years=None,
+            requirement_level="required",
+            confidence=0.9,
+            evidence=["At least 5 years of experience in embedded software."],
+            source_kind="regex_text",
+        ),
         educational_background="Bachelor",
         required_degrees=["Bachelor"],
-        required_languages=["english"],
-        preferred_languages=["dutch"],
-        required_protocols=["can"],
-        preferred_protocols=["ethercat"],
-        required_standards=["iec 61508"],
-        preferred_standards=["misra"],
+        skills=[
+            sioux_parser.SiouxJobFeature(
+                name="c++",
+                requirement_level="required",
+                confidence=0.96,
+                evidence=["experience with C++ and Embedded Linux"],
+                source_kind="llm",
+            ),
+            sioux_parser.SiouxJobFeature(
+                name="embedded linux",
+                requirement_level="required",
+                confidence=0.95,
+                evidence=["experience with C++ and Embedded Linux"],
+                source_kind="llm",
+            ),
+            sioux_parser.SiouxJobFeature(
+                name="qt",
+                requirement_level="preferred",
+                confidence=0.82,
+                evidence=["Qt is a plus"],
+                source_kind="llm",
+            ),
+        ],
+        languages=[
+            sioux_parser.SiouxJobFeature(
+                name="english",
+                requirement_level="required",
+                confidence=0.94,
+                evidence=["fluent in English"],
+                source_kind="llm",
+            ),
+            sioux_parser.SiouxJobFeature(
+                name="dutch",
+                requirement_level="preferred",
+                confidence=0.74,
+                evidence=["Dutch is a plus"],
+                source_kind="llm",
+            ),
+        ],
+        protocols=[
+            sioux_parser.SiouxJobFeature(
+                name="can",
+                requirement_level="required",
+                confidence=0.91,
+                evidence=["knowledge of CAN"],
+                source_kind="llm",
+            ),
+            sioux_parser.SiouxJobFeature(
+                name="ethercat",
+                requirement_level="preferred",
+                confidence=0.76,
+                evidence=["EtherCAT is a plus"],
+                source_kind="llm",
+            ),
+        ],
+        standards=[
+            sioux_parser.SiouxJobFeature(
+                name="iec 61508",
+                requirement_level="required",
+                confidence=0.9,
+                evidence=["IEC 61508"],
+                source_kind="llm",
+            ),
+            sioux_parser.SiouxJobFeature(
+                name="misra",
+                requirement_level="preferred",
+                confidence=0.8,
+                evidence=["MISRA is a plus"],
+                source_kind="llm",
+            ),
+        ],
         industry_domains=["Semiconductor", "Medical"],
-        required_domains=["semiconductor"],
-        preferred_domains=["medical devices"],
+        domains=[
+            sioux_parser.SiouxJobFeature(
+                name="semiconductor",
+                requirement_level="required",
+                confidence=0.88,
+                evidence=["semiconductor systems"],
+                source_kind="llm",
+            ),
+            sioux_parser.SiouxJobFeature(
+                name="medical devices",
+                requirement_level="preferred",
+                confidence=0.77,
+                evidence=["medical devices is a plus"],
+                source_kind="llm",
+            ),
+        ],
         workplace_type="Hybrid",
         fulltime_parttime="Full time",
         min_hours_per_week=32,
@@ -162,25 +310,21 @@ def test_fetch_job_combines_deterministic_and_llm_fields() -> None:
         recruiter_role="Talent acquisition",
         recruiter_email="jobs@sioux.eu",
         recruiter_phone="+31 (0)40 - 2677100",
-        required_skills=["c++", "embedded linux"],
-        preferred_skills=["qt"],
-        seniority_hint="senior",
-        restrictions=["eu work authorization"],
-        evidence=sioux_parser.SiouxJobLlmEvidence(
-            required_skills=["experience with C++ and Embedded Linux"],
-            preferred_skills=["Qt is a plus"],
-            required_languages=["fluent in English"],
-            preferred_languages=["Dutch is a plus"],
-            required_protocols=["knowledge of CAN"],
-            preferred_protocols=["EtherCAT is a plus"],
-            required_standards=["IEC 61508"],
-            preferred_standards=["MISRA is a plus"],
-            required_domains=["semiconductor systems"],
-            preferred_domains=["medical devices is a plus"],
-            seniority_hint=["Senior embedded software engineer"],
-            restrictions=["must already have EU work authorization"],
+        seniority=sioux_parser.SiouxJobSeniority(
+            value="senior",
+            confidence=0.93,
+            evidence=["Senior embedded software engineer"],
+            source_kind="llm",
         ),
+        restrictions=[
+            sioux_parser.SiouxJobRestriction(
+                value="eu work authorization",
+                confidence=0.95,
+                evidence=["must already have EU work authorization"],
+                source_kind="llm",
+            )
+        ],
         description_text="Senior embedded role for semiconductor systems.",
     )
-    assert "required_protocols=['can']" in messages[-1]
-    assert "seniority_hint='senior'" in messages[-1]
+    assert "languages=2" in messages[-1]
+    assert "seniority='senior'" in messages[-1]
