@@ -61,7 +61,12 @@ def extract_discipline_facets(page: Page) -> list[tuple[str, str, int]]:
     return facets
 
 
-def collect_job_links_from_page(page: Page, context: str) -> set[str]:
+def collect_job_links_from_page(
+    page: Page,
+    context: str,
+    *,
+    job_limit: int | None = None,
+) -> set[str]:
     hrefs: set[str] = set()
 
     cards = page.locator("a.act-item-job-overview")
@@ -75,6 +80,8 @@ def collect_job_links_from_page(page: Page, context: str) -> set[str]:
         href = absolutize_url(href)
         if JOB_URL_RE.match(href):
             hrefs.add(href)
+            if job_limit is not None and len(hrefs) >= job_limit:
+                break
 
     log(f"{context}: collected {len(hrefs)} vacancy links from current page")
     return hrefs
@@ -84,6 +91,7 @@ def collect_links_from_paginated_listing(
     page: Page,
     context: str,
     expected_count: int | None = None,
+    job_limit: int | None = None,
 ) -> set[str]:
     collected_links: set[str] = set()
     visited_pages: set[str] = set()
@@ -97,7 +105,18 @@ def collect_links_from_paginated_listing(
 
         visited_pages.add(current_url)
 
-        page_links = collect_job_links_from_page(page, f"{context} page {page_index}")
+        remaining_limit = None
+        if job_limit is not None:
+            remaining_limit = max(job_limit - len(collected_links), 0)
+            if remaining_limit == 0:
+                log(f"{context}: reached job limit, stopping pagination")
+                break
+
+        page_links = collect_job_links_from_page(
+            page,
+            f"{context} page {page_index}",
+            job_limit=remaining_limit,
+        )
         before = len(collected_links)
         collected_links.update(page_links)
         after = len(collected_links)
@@ -109,6 +128,10 @@ def collect_links_from_paginated_listing(
 
         if expected_count is not None and expected_count > 0 and after >= expected_count:
             log(f"{context}: reached expected count, stopping pagination")
+            break
+
+        if job_limit is not None and after >= job_limit:
+            log(f"{context}: reached job limit, stopping pagination")
             break
 
         next_url = get_next_page_url(page)
@@ -148,6 +171,8 @@ def collect_links_for_facet(
     facet_name: str,
     facet_url: str,
     expected_count: int,
+    *,
+    job_limit: int | None = None,
 ) -> set[str]:
     context = browser.new_context()
     page = context.new_page()
@@ -167,6 +192,7 @@ def collect_links_for_facet(
             page,
             context=f"facet '{facet_name}'",
             expected_count=expected_count,
+            job_limit=job_limit,
         )
 
         log(
@@ -180,6 +206,8 @@ def collect_links_for_facet(
 
 def collect_job_links_via_facets(
     browser: Browser,
+    *,
+    job_limit: int | None = None,
 ) -> tuple[list[str], dict[str, list[str]]]:
     seed_context = browser.new_context()
     seed_page = seed_context.new_page()
@@ -200,15 +228,26 @@ def collect_job_links_via_facets(
     url_to_disciplines: dict[str, set[str]] = {}
 
     for facet_name, facet_url, expected_count in facets:
+        if job_limit is not None and len(all_hrefs) >= job_limit:
+            log("facet traversal: reached job limit, stopping")
+            break
+
         log(f"--- facet traversal: {facet_name} ---")
+        remaining_limit = None
+        if job_limit is not None:
+            remaining_limit = max(job_limit - len(all_hrefs), 0)
+
         facet_links = collect_links_for_facet(
             browser,
             facet_name,
             facet_url,
             expected_count,
+            job_limit=remaining_limit,
         )
 
-        for url in facet_links:
+        for url in sorted(facet_links):
+            if job_limit is not None and url not in all_hrefs and len(all_hrefs) >= job_limit:
+                break
             all_hrefs.add(url)
             url_to_disciplines.setdefault(url, set()).add(facet_name)
 
@@ -230,7 +269,11 @@ def collect_job_links_via_facets(
     return job_links, discipline_map
 
 
-def collect_job_links_via_unfiltered_pagination(browser: Browser) -> list[str]:
+def collect_job_links_via_unfiltered_pagination(
+    browser: Browser,
+    *,
+    job_limit: int | None = None,
+) -> list[str]:
     context = browser.new_context()
     page = context.new_page()
 
@@ -245,6 +288,7 @@ def collect_job_links_via_unfiltered_pagination(browser: Browser) -> list[str]:
         unfiltered_links = collect_links_from_paginated_listing(
             page,
             context="unfiltered overview",
+            job_limit=job_limit,
         )
         job_links = sorted(unfiltered_links)
 
@@ -310,9 +354,19 @@ def log_collection_validation_report(report: dict[str, object]) -> None:
     log(f"sets_exactly_equal={report['sets_exactly_equal']}")
 
 
-def retrieve_sioux_job_links(browser: Browser) -> SiouxRetrievalResult:
-    facet_union_urls, discipline_map = collect_job_links_via_facets(browser)
-    unfiltered_pagination_urls = collect_job_links_via_unfiltered_pagination(browser)
+def retrieve_sioux_job_links(
+    browser: Browser,
+    *,
+    job_limit: int | None = None,
+) -> SiouxRetrievalResult:
+    facet_union_urls, discipline_map = collect_job_links_via_facets(
+        browser,
+        job_limit=job_limit,
+    )
+    unfiltered_pagination_urls = collect_job_links_via_unfiltered_pagination(
+        browser,
+        job_limit=job_limit,
+    )
 
     validation_report = build_collection_validation_report(
         facet_union_urls=facet_union_urls,

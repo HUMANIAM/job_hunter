@@ -42,6 +42,13 @@ class FetchSourceJobsResult:
     matched_jobs: list[Any]
 
 
+def _positive_int(value: str) -> int:
+    parsed_value = int(value)
+    if parsed_value < 1:
+        raise argparse.ArgumentTypeError("--job-limit must be >= 1")
+    return parsed_value
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Fetch jobs for a company source.")
     parser.add_argument(
@@ -66,6 +73,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--write-validation",
         action="store_true",
         help="Write the source validation artifact.",
+    )
+    parser.add_argument(
+        "--job-limit",
+        type=_positive_int,
+        help="Maximum number of jobs to collect and validate.",
     )
     return parser.parse_args(list(argv) if argv is not None else None)
 
@@ -124,11 +136,15 @@ def fetch_source_jobs(
     browser: Any,
     source: SourceDefinition,
     *,
+    job_limit: int | None = None,
     write_raw_jobs: bool = False,
     write_evaluated_jobs: bool = False,
     write_validation_report: bool = False,
 ) -> FetchSourceJobsResult:
-    retrieval = source.adapter.retrieve_job_links(browser)
+    retrieval = source.adapter.retrieve_job_links(
+        browser,
+        job_limit=job_limit,
+    )
     source.adapter.log_validation_report(retrieval.validation_report)
     if write_validation_report:
         report_writer.write_validation_report(
@@ -214,6 +230,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             result = fetch_source_jobs(
                 browser,
                 source,
+                job_limit=args.job_limit,
                 write_raw_jobs=args.write_raw,
                 write_evaluated_jobs=args.write_evaluated,
                 write_validation_report=args.write_validation,
