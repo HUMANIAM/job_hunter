@@ -29,7 +29,7 @@ def test_parse_args_accepts_company_option() -> None:
     assert args.company == "sioux"
 
 
-def test_parse_args_defaults_to_final_output_only() -> None:
+def test_parse_args_defaults_to_optional_outputs_disabled() -> None:
     args = fetch_jobs.parse_args([])
 
     assert args.company == "sioux"
@@ -83,6 +83,24 @@ class FakeParser:
         )
 
 
+class RaisingParser(FakeParser):
+    def fetch_job(
+        self,
+        page: object,
+        url: str,
+        disciplines: list[str] | None = None,
+        log_message=None,
+    ) -> FakeJob | None:
+        self.calls.append((page, url, disciplines or [], log_message))
+        if url.endswith("/broken"):
+            raise RuntimeError("llm failed")
+        return FakeJob(
+            title="Controls Engineer",
+            description_text="Build control software.",
+            url=url,
+        )
+
+
 class FakeAdapter:
     def __init__(self, retrieval: SourceRetrievalResult) -> None:
         self.retrieval = retrieval
@@ -119,7 +137,7 @@ class FakeBrowser:
         return self.context
 
 
-def test_fetch_source_jobs_skips_validation_file_by_default(monkeypatch) -> None:
+def test_fetch_source_jobs_writes_only_match_by_default(monkeypatch) -> None:
     validation_report = {"facet_union_count": 2, "pagination_count": 2}
     retrieval = SourceRetrievalResult(
         job_links=[
@@ -144,6 +162,9 @@ def test_fetch_source_jobs_skips_validation_file_by_default(monkeypatch) -> None
     )
     messages: list[str] = []
     validation_writes: list[tuple[dict[str, object], str, object]] = []
+    raw_writes: list[tuple[dict[str, object], str, object]] = []
+    evaluated_writes: list[tuple[dict[str, object], str, object]] = []
+    match_writes: list[tuple[dict[str, object], str, object]] = []
 
     monkeypatch.setattr(fetch_jobs, "log", messages.append)
     monkeypatch.setattr(
@@ -153,18 +174,40 @@ def test_fetch_source_jobs_skips_validation_file_by_default(monkeypatch) -> None
             (report, company_slug, log_message)
         ),
     )
+    monkeypatch.setattr(
+        fetch_jobs.report_writer,
+        "write_raw_job",
+        lambda payload, *, company_slug, log_message: raw_writes.append(
+            (payload, company_slug, log_message)
+        ),
+    )
+    monkeypatch.setattr(
+        fetch_jobs.report_writer,
+        "write_evaluated_job",
+        lambda payload, *, company_slug, log_message: evaluated_writes.append(
+            (payload, company_slug, log_message)
+        ),
+    )
+    monkeypatch.setattr(
+        fetch_jobs.report_writer,
+        "write_match_job",
+        lambda payload, *, company_slug, log_message: match_writes.append(
+            (payload, company_slug, log_message)
+        ),
+    )
 
-    jobs = fetch_jobs.fetch_source_jobs(browser, source)
+    result = fetch_jobs.fetch_source_jobs(browser, source)
 
-    assert jobs == [
-        FakeJob(
-            title="Controls Engineer",
-            description_text="Build control software.",
-            url="https://example.com/jobs/controls",
-        )
+    assert [job.url for job in result.jobs] == ["https://example.com/jobs/controls"]
+    assert [job.url for job in result.matched_jobs] == [
+        "https://example.com/jobs/controls"
     ]
     assert adapter.logged_reports == [validation_report]
     assert validation_writes == []
+    assert raw_writes == []
+    assert evaluated_writes == []
+    assert len(match_writes) == 1
+    assert match_writes[0][0]["url"] == "https://example.com/jobs/controls"
     assert parser.calls == [
         (
             browser.context.page,
@@ -180,11 +223,99 @@ def test_fetch_source_jobs_skips_validation_file_by_default(monkeypatch) -> None
         ),
     ]
     assert browser.context.closed is True
-    assert messages == [
+    assert messages[0:2] == [
         "fetch progress: [1/2]",
-        "fetch progress: [2/2]",
-        "closing browser after fetching 1 jobs",
+        "KEEP [1] 'Controls Engineer' | reason=title_keep_match | title_hits=['controls'] | description_hits=[]",
     ]
+    assert messages[-1] == "closing browser after fetching 1 jobs"
+
+
+def test_fetch_source_jobs_writes_requested_debug_artifacts(monkeypatch) -> None:
+    retrieval = SourceRetrievalResult(
+        job_links=["https://example.com/jobs/controls"],
+        discipline_map={"https://example.com/jobs/controls": ["Control"]},
+        validation_report={},
+    )
+    source = SourceDefinition(
+        company_slug="sioux",
+        source_url="https://example.com/jobs",
+        configured_countries=("Netherlands",),
+        configured_languages=("en",),
+        adapter=FakeAdapter(retrieval),
+        parser=FakeParser(),
+    )
+    browser = FakeBrowser()
+    raw_writes: list[dict[str, object]] = []
+    evaluated_writes: list[dict[str, object]] = []
+    match_writes: list[dict[str, object]] = []
+
+    monkeypatch.setattr(
+        fetch_jobs.report_writer,
+        "write_raw_job",
+        lambda payload, **_: raw_writes.append(payload),
+    )
+    monkeypatch.setattr(
+        fetch_jobs.report_writer,
+        "write_evaluated_job",
+        lambda payload, **_: evaluated_writes.append(payload),
+    )
+    monkeypatch.setattr(
+        fetch_jobs.report_writer,
+        "write_match_job",
+        lambda payload, **_: match_writes.append(payload),
+    )
+
+    fetch_jobs.fetch_source_jobs(
+        browser,
+        source,
+        write_raw_jobs=True,
+        write_evaluated_jobs=True,
+    )
+
+    assert len(raw_writes) == 1
+    assert raw_writes[0]["url"] == "https://example.com/jobs/controls"
+    assert len(evaluated_writes) == 1
+    assert evaluated_writes[0]["decision"] == "keep"
+    assert len(match_writes) == 1
+    assert match_writes[0]["url"] == "https://example.com/jobs/controls"
+
+
+def test_fetch_source_jobs_continues_after_single_job_failure(monkeypatch) -> None:
+    retrieval = SourceRetrievalResult(
+        job_links=[
+            "https://example.com/jobs/broken",
+            "https://example.com/jobs/controls",
+        ],
+        discipline_map={},
+        validation_report={},
+    )
+    source = SourceDefinition(
+        company_slug="sioux",
+        source_url="https://example.com/jobs",
+        configured_countries=("Netherlands",),
+        configured_languages=("en",),
+        adapter=FakeAdapter(retrieval),
+        parser=RaisingParser(),
+    )
+    browser = FakeBrowser()
+    messages: list[str] = []
+    match_writes: list[dict[str, object]] = []
+
+    monkeypatch.setattr(fetch_jobs, "log", messages.append)
+    monkeypatch.setattr(
+        fetch_jobs.report_writer,
+        "write_match_job",
+        lambda payload, **_: match_writes.append(payload),
+    )
+    monkeypatch.setattr(fetch_jobs.report_writer, "write_evaluated_job", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(fetch_jobs.report_writer, "write_raw_job", lambda *_args, **_kwargs: None)
+
+    result = fetch_jobs.fetch_source_jobs(browser, source)
+
+    assert [job.url for job in result.jobs] == ["https://example.com/jobs/controls"]
+    assert len(match_writes) == 1
+    assert match_writes[0]["url"] == "https://example.com/jobs/controls"
+    assert any("job failed: url='https://example.com/jobs/broken'" in message for message in messages)
 
 
 def test_fetch_source_jobs_writes_validation_when_enabled(monkeypatch) -> None:
@@ -231,7 +362,7 @@ def _yield(value: object):
     yield value
 
 
-def test_main_writes_only_kept_jobs_by_default(monkeypatch) -> None:
+def test_main_writes_inline_job_states(monkeypatch) -> None:
     source = SourceDefinition(
         company_slug="sioux",
         source_url="https://example.com/jobs",
@@ -246,48 +377,32 @@ def test_main_writes_only_kept_jobs_by_default(monkeypatch) -> None:
         ),
         parser=FakeParser(),
     )
-    fetched_jobs = [
-        FakeJob(
-            title="Controls Engineer",
-            description_text="Build control software.",
-            url="https://example.com/jobs/controls",
-        )
-    ]
-    kept_writes: list[dict[str, object]] = []
-    raw_calls: list[dict[str, object]] = []
-    evaluated_calls: list[dict[str, object]] = []
+    result = fetch_jobs.FetchSourceJobsResult(
+        jobs=[
+            FakeJob(
+                title="Controls Engineer",
+                description_text="Build control software.",
+                url="https://example.com/jobs/controls",
+            )
+        ],
+        matched_jobs=[
+            FakeJob(
+                title="Controls Engineer",
+                description_text="Build control software.",
+                url="https://example.com/jobs/controls",
+            )
+        ],
+    )
     fetch_calls: list[bool] = []
+    messages: list[str] = []
 
     monkeypatch.setattr(fetch_jobs, "get_source", lambda company: source)
     monkeypatch.setattr(
         fetch_jobs,
         "fetch_source_jobs",
-        lambda browser, resolved_source, *, write_validation_report=False: (
-            fetch_calls.append(write_validation_report) or fetched_jobs
+        lambda browser, resolved_source, **kwargs: (
+            fetch_calls.append(kwargs["write_validation_report"]) or result
         ),
-    )
-    monkeypatch.setattr(
-        fetch_jobs,
-        "evaluate_jobs",
-        lambda jobs, *, log_message=None: SimpleNamespace(
-            evaluated_jobs=[{"title": "Controls Engineer", "decision": "keep"}],
-            kept_jobs=jobs,
-        ),
-    )
-    monkeypatch.setattr(
-        fetch_jobs.report_writer,
-        "write_raw_jobs",
-        lambda **kwargs: raw_calls.append(kwargs),
-    )
-    monkeypatch.setattr(
-        fetch_jobs.report_writer,
-        "write_evaluated_jobs",
-        lambda **kwargs: evaluated_calls.append(kwargs),
-    )
-    monkeypatch.setattr(
-        fetch_jobs.report_writer,
-        "write_kept_jobs",
-        lambda **kwargs: kept_writes.append(kwargs),
     )
     monkeypatch.setattr(fetch_jobs, "sync_playwright", lambda: _yield(object()))
     monkeypatch.setattr(
@@ -295,26 +410,16 @@ def test_main_writes_only_kept_jobs_by_default(monkeypatch) -> None:
         "launched_chromium",
         lambda playwright, *, headless=True: _yield(object()),
     )
-    monkeypatch.setattr(fetch_jobs, "log", lambda _message: None)
+    monkeypatch.setattr(fetch_jobs, "log", messages.append)
 
     fetch_jobs.main([])
 
     assert fetch_calls == [False]
-    assert raw_calls == []
-    assert evaluated_calls == []
-    assert len(kept_writes) == 1
-    assert kept_writes[0]["jobs"] == [
-        {
-            "title": "Controls Engineer",
-            "description_text": "Build control software.",
-            "url": "https://example.com/jobs/controls",
-        }
-    ]
-    assert kept_writes[0]["total_jobs"] == 1
-    assert kept_writes[0]["company_slug"] == "sioux"
+    assert messages[0] == "program started"
+    assert messages[-1] == "done: total_jobs=1 | relevant_jobs=1 | elapsed_seconds=0.00"
 
 
-def test_main_writes_optional_outputs_when_requested(monkeypatch) -> None:
+def test_main_passes_validation_flag(monkeypatch) -> None:
     source = SourceDefinition(
         company_slug="sioux",
         source_url="https://example.com/jobs",
@@ -329,48 +434,16 @@ def test_main_writes_optional_outputs_when_requested(monkeypatch) -> None:
         ),
         parser=FakeParser(),
     )
-    fetched_jobs = [
-        FakeJob(
-            title="Controls Engineer",
-            description_text="Build control software.",
-            url="https://example.com/jobs/controls",
-        )
-    ]
-    raw_calls: list[dict[str, object]] = []
-    evaluated_calls: list[dict[str, object]] = []
-    kept_calls: list[dict[str, object]] = []
     fetch_calls: list[bool] = []
 
     monkeypatch.setattr(fetch_jobs, "get_source", lambda company: source)
     monkeypatch.setattr(
         fetch_jobs,
         "fetch_source_jobs",
-        lambda browser, resolved_source, *, write_validation_report=False: (
-            fetch_calls.append(write_validation_report) or fetched_jobs
+        lambda browser, resolved_source, **kwargs: (
+            fetch_calls.append(kwargs["write_validation_report"])
+            or fetch_jobs.FetchSourceJobsResult(jobs=[], matched_jobs=[])
         ),
-    )
-    monkeypatch.setattr(
-        fetch_jobs,
-        "evaluate_jobs",
-        lambda jobs, *, log_message=None: SimpleNamespace(
-            evaluated_jobs=[{"title": "Controls Engineer", "decision": "keep"}],
-            kept_jobs=jobs,
-        ),
-    )
-    monkeypatch.setattr(
-        fetch_jobs.report_writer,
-        "write_raw_jobs",
-        lambda **kwargs: raw_calls.append(kwargs),
-    )
-    monkeypatch.setattr(
-        fetch_jobs.report_writer,
-        "write_evaluated_jobs",
-        lambda **kwargs: evaluated_calls.append(kwargs),
-    )
-    monkeypatch.setattr(
-        fetch_jobs.report_writer,
-        "write_kept_jobs",
-        lambda **kwargs: kept_calls.append(kwargs),
     )
     monkeypatch.setattr(fetch_jobs, "sync_playwright", lambda: _yield(object()))
     monkeypatch.setattr(
@@ -380,25 +453,51 @@ def test_main_writes_optional_outputs_when_requested(monkeypatch) -> None:
     )
     monkeypatch.setattr(fetch_jobs, "log", lambda _message: None)
 
-    fetch_jobs.main(
-        [
-            "--write-raw",
-            "--write-evaluated",
-            "--write-validation",
-        ]
-    )
+    fetch_jobs.main(["--write-validation"])
 
     assert fetch_calls == [True]
-    assert len(raw_calls) == 1
-    assert raw_calls[0]["jobs"] == [
+
+
+def test_main_passes_debug_output_flags(monkeypatch) -> None:
+    source = SourceDefinition(
+        company_slug="sioux",
+        source_url="https://example.com/jobs",
+        configured_countries=("Netherlands",),
+        configured_languages=("en",),
+        adapter=FakeAdapter(
+            SourceRetrievalResult(
+                job_links=[],
+                discipline_map={},
+                validation_report={},
+            )
+        ),
+        parser=FakeParser(),
+    )
+    fetch_kwargs: list[dict[str, bool]] = []
+
+    monkeypatch.setattr(fetch_jobs, "get_source", lambda company: source)
+    monkeypatch.setattr(
+        fetch_jobs,
+        "fetch_source_jobs",
+        lambda browser, resolved_source, **kwargs: (
+            fetch_kwargs.append(kwargs)
+            or fetch_jobs.FetchSourceJobsResult(jobs=[], matched_jobs=[])
+        ),
+    )
+    monkeypatch.setattr(fetch_jobs, "sync_playwright", lambda: _yield(object()))
+    monkeypatch.setattr(
+        fetch_jobs,
+        "launched_chromium",
+        lambda playwright, *, headless=True: _yield(object()),
+    )
+    monkeypatch.setattr(fetch_jobs, "log", lambda _message: None)
+
+    fetch_jobs.main(["--write-raw", "--write-evaluated"])
+
+    assert fetch_kwargs == [
         {
-            "title": "Controls Engineer",
-            "description_text": "Build control software.",
-            "url": "https://example.com/jobs/controls",
+            "write_raw_jobs": True,
+            "write_evaluated_jobs": True,
+            "write_validation_report": False,
         }
     ]
-    assert len(evaluated_calls) == 1
-    assert evaluated_calls[0]["jobs"] == [
-        {"title": "Controls Engineer", "decision": "keep"}
-    ]
-    assert len(kept_calls) == 1
