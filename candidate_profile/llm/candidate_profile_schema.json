@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "search_profile/search_profile.schema.json",
+  "$id": "candidate_profile/candidate_profile.schema.json",
   "title": "Candidate Search Profile",
   "description": "Schema for structured candidate profile extraction from CV/resume text.",
   "type": "object",
@@ -18,15 +18,21 @@
       "type": "string"
     },
     "profile": {
-      "$ref": "#/$defs/searchProfile"
+      "$ref": "#/$defs/candidateProfile"
     }
   },
   "$defs": {
     "nullableString": {
-      "type": ["string", "null"]
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "nullableInteger": {
-      "type": ["integer", "null"]
+      "type": [
+        "integer",
+        "null"
+      ]
     },
     "confidenceScore": {
       "type": "number",
@@ -201,7 +207,7 @@
         }
       }
     },
-    "searchProfile": {
+    "candidateProfile": {
       "type": "object",
       "additionalProperties": false,
       "required": [
