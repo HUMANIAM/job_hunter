@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
 from pydantic import BaseModel
 
 from shared.llm import (
@@ -177,3 +178,56 @@ def test_openai_structured_extractor_raises_on_refusal() -> None:
         assert str(error) == "Test extraction refused the request: policy"
     else:
         raise AssertionError("expected refusal to raise RuntimeError")
+
+
+def test_openai_structured_extractor_logs_request_diagnostics_on_exception(
+    capsys,
+) -> None:
+    class ParsedPayload(BaseModel):
+        value: str
+
+    class FakeResponse:
+        status_code = 400
+        text = '{"error":"invalid json"}'
+
+        def json(self) -> dict[str, str]:
+            return {"error": "invalid json"}
+
+    class FakeError(Exception):
+        def __init__(self) -> None:
+            super().__init__("request failed")
+            self.status_code = 400
+            self.body = {"error": {"message": "bad request"}}
+            self.response = FakeResponse()
+
+    class FakeCompletions:
+        def parse(self, **_: object) -> object:
+            raise FakeError()
+
+    fake_client = SimpleNamespace(
+        chat=SimpleNamespace(completions=FakeCompletions())
+    )
+    extractor = OpenAIStructuredExtractor(
+        client=fake_client,
+        model="gpt-test",
+        response_format=ParsedPayload,
+        system_message="system message",
+        render_user_message=lambda payload: f"user:{payload}",
+        operation_name="Test extraction",
+        timeout_seconds=7.0,
+        max_completion_tokens=222,
+    )
+
+    with pytest.raises(FakeError, match="request failed"):
+        extractor.extract({"job_id": 7, "score": float("nan")})
+
+    captured = capsys.readouterr()
+    assert "OpenAIStructuredExtractor request failed" in captured.err
+    assert '"operation_name": "Test extraction"' in captured.err
+    assert '"response_format": "ParsedPayload"' in captured.err
+    assert '"payload_type": "dict"' in captured.err
+    assert '"payload_preview"' in captured.err
+    assert '"exception_type": "FakeError"' in captured.err
+    assert '"status_code": 400' in captured.err
+    assert '"response_json"' in captured.err
+    assert '"strict_json_serializable": true' in captured.err
