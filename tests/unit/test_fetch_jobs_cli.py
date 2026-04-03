@@ -565,6 +565,70 @@ def test_fetch_source_jobs_writes_requested_debug_artifacts(monkeypatch) -> None
     assert ranking_writes[0]["candidate_id"] == "Ibrahim_Saad_CV"
 
 
+def test_fetch_source_jobs_skips_match_artifact_below_threshold(monkeypatch) -> None:
+    retrieval = SourceRetrievalResult(
+        job_links=["https://example.com/jobs/controls"],
+        discipline_map={},
+        validation_report={},
+    )
+    source = SourceDefinition(
+        company_slug="sioux",
+        source_url="https://example.com/jobs",
+        configured_countries=("Netherlands",),
+        configured_languages=("en",),
+        adapter=FakeAdapter(retrieval),
+        parser=FakeParser(),
+    )
+    browser = FakeBrowser()
+    messages: list[str] = []
+    evaluated_writes: list[dict[str, object]] = []
+    match_writes: list[dict[str, object]] = []
+    ranking_writes: list[dict[str, object]] = []
+
+    monkeypatch.setattr(job_hunter, "log", messages.append)
+    monkeypatch.setattr(
+        job_hunter,
+        "rank_job",
+        lambda *_args, **_kwargs: _fake_ranking_result(
+            FakeJob(
+                job_id="controls_engineer__test123456",
+                title="Controls Engineer",
+                description_text="Build control software.",
+                url="https://example.com/jobs/controls",
+            ),
+            score=0.59,
+        ),
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_evaluated_job",
+        lambda payload, **_: evaluated_writes.append(payload),
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_match_job",
+        lambda payload, **_: match_writes.append(payload),
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_ranking_result",
+        lambda payload, **_: ranking_writes.append(payload),
+    )
+
+    result = job_hunter.fetch_source_jobs(
+        browser,
+        source,
+        candidate_profile=_fake_candidate_profile(),
+    )
+
+    assert [job.url for job in result.jobs] == ["https://example.com/jobs/controls"]
+    assert len(evaluated_writes) == 1
+    assert len(ranking_writes) == 1
+    assert ranking_writes[0]["score"] == 0.59
+    assert match_writes == []
+    assert any(message == "skip match: job_id='controls_engineer__test123456' | score=0.590 < 0.600" for message in messages)
+
+
 def test_fetch_source_jobs_passes_job_limit_to_adapter(monkeypatch) -> None:
     retrieval = SourceRetrievalResult(
         job_links=["https://example.com/jobs/controls"],
