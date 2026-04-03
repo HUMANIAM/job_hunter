@@ -36,7 +36,7 @@
     {
       "name": "cleanroom behavior",
       "requirement_level": "required",
-      "confidence": 0.8,
+      "confidence": 0.7,
       "evidence": [
         "applying your knowledge and skills in mechatronics, cleanliness, and cleanroom behavior"
       ],
@@ -102,9 +102,9 @@
     {
       "name": "high-tech",
       "requirement_level": "required",
-      "confidence": 0.8,
+      "confidence": 0.7,
       "evidence": [
-        "bringing high-tech solutions to life"
+        "At least 3 years of experience as a technician/prototype technician/service technician in the high-tech industry"
       ],
       "source_kind": "llm"
     }
@@ -123,7 +123,7 @@
   "recruiter_phone": "+31 (0)40 - 2677100",
   "seniority": {
     "value": "medior",
-    "confidence": 0.8,
+    "confidence": 0.7,
     "evidence": [
       "At least 3 years of experience as a technician/prototype technician/service technician in the high-tech industry"
     ],
@@ -134,7 +134,7 @@
       "value": "access to controlled technology as per us export administration regulations",
       "confidence": 0.9,
       "evidence": [
-        "This position requires access to controlled technology, as defined in the US Export Administration Regulations (15 C.F.R. \u0000 730, et seq.)"
+        "This position requires access to controlled technology, as defined in the US Export Administration Regulations (15 C.F.R. \u0000 730, et seq.). Qualified candidates must be legally authorized to access such controlled technology prior to beginning work."
       ],
       "source_kind": "llm"
     }

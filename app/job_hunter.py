@@ -14,7 +14,7 @@ What it does:
 - writes one evaluated job profile per vacancy under data/job_profiles/<company>/evaluated
 - ranks all extracted jobs against the selected candidate profile
 - writes per-job ranking files under data/rankings
-- writes per-job match artifacts under data/job_profiles/<company>/match
+- writes per-job match artifacts under data/job_profiles/<company>/match when score >= 0.6
 - optionally writes raw state files
 - optionally writes the collection validation report under data/job_profiles/<company>
 """
@@ -67,6 +67,7 @@ DEFAULT_CANDIDATE_PROFILE_PATH = next(
     iter(sorted(DEFAULT_CANDIDATE_PROFILE_DIR.glob("*.json"))),
     DEFAULT_CANDIDATE_PROFILE_DIR / "Ibrahim_Saad_CV.json",
 )
+DEFAULT_MATCH_SCORE_THRESHOLD = 0.6
 _CANDIDATE_PROFILE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
@@ -265,11 +266,18 @@ def fetch_source_jobs(
                     ranking_result,
                     log_message=log,
                 )
-                report_writer.write_match_job(
-                    _build_evaluated_job_payload(job, ranking_result),
-                    company_slug=source.company_slug,
-                    log_message=log,
-                )
+                if ranking_result["score"] >= DEFAULT_MATCH_SCORE_THRESHOLD:
+                    report_writer.write_match_job(
+                        _build_evaluated_job_payload(job, ranking_result),
+                        company_slug=source.company_slug,
+                        log_message=log,
+                    )
+                else:
+                    log(
+                        f"skip match: job_id='{job.job_id}' | "
+                        f"score={ranking_result['score']:.3f} < "
+                        f"{DEFAULT_MATCH_SCORE_THRESHOLD:.3f}"
+                    )
                 ranking_results.append(ranking_result)
                 ranked_jobs.append(job)
             except Exception as error:

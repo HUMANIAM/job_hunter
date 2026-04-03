@@ -82,7 +82,7 @@ Write all optional debug artifacts as well:
 - `--company <slug>`: source/company slug to fetch. Defaults to `sioux`.
 - `--candidate-profile <path>` / `--cv <path>`: candidate profile JSON or CV source file used for ranking. Non-JSON inputs are extracted once and persisted under `data/candidate_profiles/`.
 - evaluated job profiles are always written under `data/job_profiles/<company>/evaluated/`.
-- match artifacts are always written under `data/job_profiles/<company>/match/`.
+- match artifacts are written under `data/job_profiles/<company>/match/` only when the ranking score is at least `0.6`.
 - `--write-raw`: also write per-job raw artifacts under `data/job_profiles/<company>/raw/`.
 - `--write-evaluated`: deprecated compatibility flag; evaluated and match artifacts are already written by default.
 - `--write-validation`: write the collection validation artifact.
@@ -96,7 +96,7 @@ Candidate profiles are written under `data/candidate_profiles/`.
 Job profiles are written under `data/job_profiles/<company>/`.
 
 - `evaluated/<job_title>__<url_hash>.json`: one evaluated job profile per extracted vacancy, written before ranking.
-- `match/<job_title>__<url_hash>.json`: the same job payload plus embedded ranking metadata, written immediately after ranking.
+- `match/<job_title>__<url_hash>.json`: the same job payload plus embedded ranking metadata, written only when the ranking score is at least `0.6`.
 
 Ranking files are written under `data/rankings/`.
 
