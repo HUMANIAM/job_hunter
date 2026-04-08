@@ -9,7 +9,7 @@ from typing import Callable, Iterable
 from playwright.sync_api import Page
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
-from shared.normalizer import normalize_text
+from shared.normalizer import normalize_taxonomy_name, normalize_text
 from sources.sioux.llm import (
     SiouxLlmExtractionPayload,
     SiouxLlmExtractor,
@@ -83,6 +83,17 @@ class SiouxJobYearsExperienceRequirement:
 
 
 @dataclass
+class SiouxJobConstraint:
+    kind: str
+    bucket: str
+    value: str | None
+    min_years: int | None
+    confidence: float
+    evidence: list[str]
+    source_kind: str | None
+
+
+@dataclass
 class SiouxJob:
     job_id: str
     title: str
@@ -100,6 +111,7 @@ class SiouxJob:
     standards: list[SiouxJobFeature]
     industry_domains: list[str]
     domains: list[SiouxJobFeature]
+    job_constraints: list[SiouxJobConstraint]
     workplace_type: str | None
     fulltime_parttime: str | None
     min_hours_per_week: int | None
@@ -649,6 +661,138 @@ def _build_years_experience_requirement(
     )
 
 
+def _constraint_value_for_restriction(value: str | None) -> str:
+    normalized = normalize_taxonomy_name(value or "")
+    if not normalized:
+        return "restriction"
+    if "citizen" in normalized or "citizenship" in normalized or "nationality" in normalized:
+        return "citizenship"
+    if any(
+        token in normalized
+        for token in (
+            "security clearance",
+            "clearance",
+            "controlled technology",
+            "export administration regulations",
+            "export control",
+            "ear",
+        )
+    ):
+        return "controlled_technology"
+    if any(
+        token in normalized
+        for token in (
+            "work authorization",
+            "work authorisation",
+            "legally authorized",
+            "legally authorised",
+            "visa",
+            "sponsorship",
+        )
+    ):
+        return "work_authorization"
+    return "restriction"
+
+
+def _build_job_constraints(
+    *,
+    skills: list[SiouxJobFeature],
+    languages: list[SiouxJobFeature],
+    protocols: list[SiouxJobFeature],
+    standards: list[SiouxJobFeature],
+    domains: list[SiouxJobFeature],
+    seniority: SiouxJobSeniority,
+    years_experience_requirement: SiouxJobYearsExperienceRequirement,
+    restrictions: list[SiouxJobRestriction],
+) -> list[SiouxJobConstraint]:
+    constraints: list[SiouxJobConstraint] = []
+    seen_keys: set[tuple[str, str, str | None, int | None]] = set()
+
+    def append_constraint(
+        *,
+        kind: str,
+        bucket: str,
+        value: str | None,
+        min_years: int | None,
+        confidence: float,
+        evidence: list[str],
+        source_kind: str | None,
+    ) -> None:
+        key = (kind, bucket, value, min_years)
+        if key in seen_keys:
+            return
+        seen_keys.add(key)
+        constraints.append(
+            SiouxJobConstraint(
+                kind=kind,
+                bucket=bucket,
+                value=value,
+                min_years=min_years,
+                confidence=confidence,
+                evidence=list(evidence),
+                source_kind=source_kind,
+            )
+        )
+
+    for bucket_name, items in (
+        ("skills", skills),
+        ("languages", languages),
+        ("protocols", protocols),
+        ("standards", standards),
+        ("domains", domains),
+    ):
+        for item in items:
+            if item.requirement_level != "required":
+                continue
+            append_constraint(
+                kind="feature",
+                bucket=bucket_name,
+                value=item.name,
+                min_years=None,
+                confidence=item.confidence,
+                evidence=item.evidence,
+                source_kind=item.source_kind,
+            )
+
+    if seniority.value is not None:
+        append_constraint(
+            kind="seniority",
+            bucket="seniority",
+            value=seniority.value,
+            min_years=None,
+            confidence=seniority.confidence,
+            evidence=seniority.evidence,
+            source_kind=seniority.source_kind,
+        )
+
+    if (
+        years_experience_requirement.min_years is not None
+        and years_experience_requirement.requirement_level != "preferred"
+    ):
+        append_constraint(
+            kind="years_experience",
+            bucket="years_experience",
+            value=None,
+            min_years=years_experience_requirement.min_years,
+            confidence=years_experience_requirement.confidence,
+            evidence=years_experience_requirement.evidence,
+            source_kind=years_experience_requirement.source_kind,
+        )
+
+    for restriction in restrictions:
+        append_constraint(
+            kind="restriction",
+            bucket="restrictions",
+            value=_constraint_value_for_restriction(restriction.value),
+            min_years=None,
+            confidence=restriction.confidence,
+            evidence=restriction.evidence,
+            source_kind=restriction.source_kind,
+        )
+
+    return constraints
+
+
 def _summarize_years_experience(
     value: SiouxJobYearsExperienceRequirement,
 ) -> str:
@@ -782,6 +926,15 @@ def _build_job(
     deterministic_job: SiouxJobDeterministic,
     llm_payload: SiouxLlmExtractionPayload,
 ) -> SiouxJob:
+    years_experience_requirement = _build_years_experience_requirement(deterministic_job)
+    skills = _build_feature_items(llm_payload.skills)
+    languages = _build_feature_items(llm_payload.languages)
+    protocols = _build_feature_items(llm_payload.protocols)
+    standards = _build_feature_items(llm_payload.standards)
+    domains = _build_feature_items(llm_payload.domains)
+    seniority = _build_seniority(llm_payload.seniority)
+    restrictions = _build_restrictions(llm_payload.restrictions)
+
     return SiouxJob(
         job_id=compute_job_id(
             deterministic_job.title,
@@ -793,17 +946,25 @@ def _build_job(
         location=deterministic_job.location,
         team=deterministic_job.team,
         work_experience=deterministic_job.work_experience,
-        years_experience_requirement=_build_years_experience_requirement(
-            deterministic_job
-        ),
+        years_experience_requirement=years_experience_requirement,
         educational_background=deterministic_job.educational_background,
         required_degrees=deterministic_job.required_degrees,
-        skills=_build_feature_items(llm_payload.skills),
-        languages=_build_feature_items(llm_payload.languages),
-        protocols=_build_feature_items(llm_payload.protocols),
-        standards=_build_feature_items(llm_payload.standards),
+        skills=skills,
+        languages=languages,
+        protocols=protocols,
+        standards=standards,
         industry_domains=deterministic_job.industry_domains,
-        domains=_build_feature_items(llm_payload.domains),
+        domains=domains,
+        job_constraints=_build_job_constraints(
+            skills=skills,
+            languages=languages,
+            protocols=protocols,
+            standards=standards,
+            domains=domains,
+            seniority=seniority,
+            years_experience_requirement=years_experience_requirement,
+            restrictions=restrictions,
+        ),
         workplace_type=deterministic_job.workplace_type,
         fulltime_parttime=deterministic_job.fulltime_parttime,
         min_hours_per_week=deterministic_job.min_hours_per_week,
@@ -816,8 +977,8 @@ def _build_job(
         recruiter_role=deterministic_job.recruiter_role,
         recruiter_email=deterministic_job.recruiter_email,
         recruiter_phone=deterministic_job.recruiter_phone,
-        seniority=_build_seniority(llm_payload.seniority),
-        restrictions=_build_restrictions(llm_payload.restrictions),
+        seniority=seniority,
+        restrictions=restrictions,
         description_text=deterministic_job.description_text,
     )
 

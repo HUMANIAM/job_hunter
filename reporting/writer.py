@@ -9,7 +9,6 @@ from infra import json_io
 
 DEFAULT_COMPANY_SLUG = "sioux"
 BASE_OUTPUT_DIR = Path("data/job_profiles")
-BASE_RANKING_OUTPUT_DIR = Path("data/rankings")
 BASE_CANDIDATE_PROFILE_DIR = Path("data/candidate_profiles")
 
 
@@ -29,6 +28,22 @@ def match_output_dir_for(company_slug: str) -> Path:
     return output_dir_for(company_slug) / "match"
 
 
+def mismatch_output_dir_for(company_slug: str) -> Path:
+    return output_dir_for(company_slug) / "mismatch"
+
+
+def ranking_output_dir_for(company_slug: str) -> Path:
+    return output_dir_for(company_slug) / "rankings"
+
+
+def match_ranking_output_dir_for(company_slug: str) -> Path:
+    return ranking_output_dir_for(company_slug) / "match"
+
+
+def mismatch_ranking_output_dir_for(company_slug: str) -> Path:
+    return ranking_output_dir_for(company_slug) / "mismatch"
+
+
 def validation_output_path_for(company_slug: str) -> Path:
     return output_dir_for(company_slug) / f"jobs_{company_slug}_validation.json"
 
@@ -37,8 +52,11 @@ OUTPUT_DIR = output_dir_for(DEFAULT_COMPANY_SLUG)
 RAW_OUTPUT_DIR = raw_output_dir_for(DEFAULT_COMPANY_SLUG)
 EVALUATED_OUTPUT_DIR = evaluated_output_dir_for(DEFAULT_COMPANY_SLUG)
 MATCH_OUTPUT_DIR = match_output_dir_for(DEFAULT_COMPANY_SLUG)
+MISMATCH_OUTPUT_DIR = mismatch_output_dir_for(DEFAULT_COMPANY_SLUG)
+RANKING_OUTPUT_DIR = ranking_output_dir_for(DEFAULT_COMPANY_SLUG)
+MATCH_RANKING_OUTPUT_DIR = match_ranking_output_dir_for(DEFAULT_COMPANY_SLUG)
+MISMATCH_RANKING_OUTPUT_DIR = mismatch_ranking_output_dir_for(DEFAULT_COMPANY_SLUG)
 VALIDATION_OUTPUT_PATH = validation_output_path_for(DEFAULT_COMPANY_SLUG)
-RANKING_OUTPUT_DIR = BASE_RANKING_OUTPUT_DIR
 CANDIDATE_PROFILE_OUTPUT_DIR = BASE_CANDIDATE_PROFILE_DIR
 
 
@@ -84,6 +102,14 @@ def match_job_output_path_for(
     return match_output_dir_for(company_slug) / job_profile_filename(title, url)
 
 
+def mismatch_job_output_path_for(
+    company_slug: str,
+    title: str | None,
+    url: str | None,
+) -> Path:
+    return mismatch_output_dir_for(company_slug) / job_profile_filename(title, url)
+
+
 def ranking_result_filename(candidate_id: str | None, job_id: str | None) -> str:
     normalized_candidate_id = str(candidate_id or "").strip()
     normalized_job_id = str(job_id or "").strip()
@@ -94,8 +120,16 @@ def ranking_result_filename(candidate_id: str | None, job_id: str | None) -> str
     return f"{normalized_candidate_id}_{normalized_job_id}.json"
 
 
-def ranking_output_path_for(candidate_id: str | None, job_id: str | None) -> Path:
-    return BASE_RANKING_OUTPUT_DIR / ranking_result_filename(candidate_id, job_id)
+def ranking_output_path_for(
+    company_slug: str,
+    status: str,
+    candidate_id: str | None,
+    job_id: str | None,
+) -> Path:
+    filename = ranking_result_filename(candidate_id, job_id)
+    if status == "match":
+        return match_ranking_output_dir_for(company_slug) / filename
+    return mismatch_ranking_output_dir_for(company_slug) / filename
 
 
 def candidate_profile_filename(candidate_id: str | None) -> str:
@@ -220,13 +254,29 @@ def write_match_job(
     )
 
 
+def write_mismatch_job(
+    job_payload: dict[str, Any],
+    *,
+    company_slug: str = DEFAULT_COMPANY_SLUG,
+    log_message: Callable[[str], None] | None = None,
+) -> Path:
+    return _write_job_payload(
+        job_payload,
+        company_slug=company_slug,
+        path_builder=mismatch_job_output_path_for,
+        log_message=log_message,
+    )
+
+
 def write_ranking_result(
     ranking_payload: dict[str, Any],
     *,
+    company_slug: str = DEFAULT_COMPANY_SLUG,
     log_message: Callable[[str], None] | None = None,
 ) -> Path:
     candidate_id, job_id = _ranking_identity(ranking_payload)
-    output_path = ranking_output_path_for(candidate_id, job_id)
+    status = str(ranking_payload.get("status") or "mismatch")
+    output_path = ranking_output_path_for(company_slug, status, candidate_id, job_id)
     json_io.write_json(output_path, ranking_payload)
     if log_message is not None:
         log_message(f"wrote file: {output_path}")

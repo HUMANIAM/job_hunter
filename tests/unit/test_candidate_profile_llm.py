@@ -143,6 +143,7 @@ def test_candidate_profile_payload_normalizes_fields() -> None:
     assert payload.seniority.value == "senior"
     assert payload.years_experience_total.value == 7
     assert payload.candidate_constraints.preferred_locations == ["Eindhoven"]
+    assert payload.candidate_constraints.preferred_workplace_types == ["Hybrid"]
     assert payload.candidate_constraints.notes == ["Avoid export-controlled programs"]
 
 
