@@ -16,7 +16,13 @@ def test_sioux_output_paths_use_job_profiles_directory() -> None:
     assert output_writer.RAW_OUTPUT_DIR == expected_dir / "raw"
     assert output_writer.EVALUATED_OUTPUT_DIR == expected_dir / "evaluated"
     assert output_writer.MATCH_OUTPUT_DIR == expected_dir / "match"
-    assert output_writer.RANKING_OUTPUT_DIR == Path("data/rankings")
+    assert output_writer.MISMATCH_OUTPUT_DIR == expected_dir / "mismatch"
+    assert output_writer.RANKING_OUTPUT_DIR == expected_dir / "rankings"
+    assert output_writer.MATCH_RANKING_OUTPUT_DIR == expected_dir / "rankings" / "match"
+    assert (
+        output_writer.MISMATCH_RANKING_OUTPUT_DIR
+        == expected_dir / "rankings" / "mismatch"
+    )
     assert output_writer.CANDIDATE_PROFILE_OUTPUT_DIR == Path("data/candidate_profiles")
     assert (
         output_writer.VALIDATION_OUTPUT_PATH
@@ -31,6 +37,16 @@ def test_output_paths_can_be_computed_for_other_company() -> None:
     assert output_writer.raw_output_dir_for("asml") == expected_dir / "raw"
     assert output_writer.evaluated_output_dir_for("asml") == expected_dir / "evaluated"
     assert output_writer.match_output_dir_for("asml") == expected_dir / "match"
+    assert output_writer.mismatch_output_dir_for("asml") == expected_dir / "mismatch"
+    assert output_writer.ranking_output_dir_for("asml") == expected_dir / "rankings"
+    assert (
+        output_writer.match_ranking_output_dir_for("asml")
+        == expected_dir / "rankings" / "match"
+    )
+    assert (
+        output_writer.mismatch_ranking_output_dir_for("asml")
+        == expected_dir / "rankings" / "mismatch"
+    )
     assert (
         output_writer.validation_output_path_for("asml")
         == expected_dir / "jobs_asml_validation.json"
@@ -146,16 +162,32 @@ def test_write_match_job_writes_expected_payload(tmp_path: Path, monkeypatch) ->
         assert json.load(file_handle) == payload
 
 
+def test_write_mismatch_job_writes_expected_payload(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(output_writer, "BASE_OUTPUT_DIR", tmp_path / "profiles")
+
+    payload = {"title": "Planner", "url": "https://example.com/job"}
+    output_path = output_writer.write_mismatch_job(payload)
+
+    assert output_path.parent == tmp_path / "profiles" / "sioux" / "mismatch"
+    with output_path.open("r", encoding="utf-8") as file_handle:
+        assert json.load(file_handle) == payload
+
+
 def test_write_ranking_result_writes_expected_payload(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(output_writer, "BASE_RANKING_OUTPUT_DIR", tmp_path / "rankings")
+    monkeypatch.setattr(output_writer, "BASE_OUTPUT_DIR", tmp_path / "profiles")
 
     payload = {
         "candidate_id": "Ibrahim_Saad_CV",
         "job_id": "embedded_software_engineer__12345abcde",
         "score": 0.84,
+        "status": "match",
+        "decision_stage": "ranking",
         "bucket_scores": {
             "skills": 0.9,
             "languages": 0.8,
@@ -167,13 +199,57 @@ def test_write_ranking_result_writes_expected_payload(
         },
         "matched_features": [],
         "missing_features": [],
+        "rejection_reasons": [],
     }
-    output_path = output_writer.write_ranking_result(payload)
+    output_path = output_writer.write_ranking_result(payload, company_slug="sioux")
 
     assert output_path == (
         tmp_path
+        / "profiles"
+        / "sioux"
         / "rankings"
+        / "match"
         / "Ibrahim_Saad_CV_embedded_software_engineer__12345abcde.json"
+    )
+    with output_path.open("r", encoding="utf-8") as file_handle:
+        assert json.load(file_handle) == payload
+
+
+def test_write_ranking_result_writes_mismatch_under_mismatch_dir(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(output_writer, "BASE_OUTPUT_DIR", tmp_path / "profiles")
+
+    payload = {
+        "candidate_id": "Ibrahim_Saad_CV",
+        "job_id": "planner__12345abcde",
+        "score": 0.0,
+        "status": "mismatch",
+        "decision_stage": "candidate_must_have",
+        "bucket_scores": {
+            "skills": 0.0,
+            "languages": 0.0,
+            "protocols": 0.0,
+            "standards": 0.0,
+            "domains": 0.0,
+            "seniority": 0.0,
+            "years_experience": 0.0,
+        },
+        "matched_features": [],
+        "missing_features": [],
+        "rejection_reasons": [],
+    }
+
+    output_path = output_writer.write_ranking_result(payload, company_slug="sioux")
+
+    assert output_path == (
+        tmp_path
+        / "profiles"
+        / "sioux"
+        / "rankings"
+        / "mismatch"
+        / "Ibrahim_Saad_CV_planner__12345abcde.json"
     )
     with output_path.open("r", encoding="utf-8") as file_handle:
         assert json.load(file_handle) == payload

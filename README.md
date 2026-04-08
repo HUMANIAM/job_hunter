@@ -11,7 +11,7 @@ The project is currently in active experimentation with Sioux vacancies. The scr
 Today the project already includes:
 - a Playwright-based vacancy scraper
 - candidate-profile reuse or extraction from a CV source file
-- per-job evaluated job profiles, match artifacts, and ranking results
+- per-job evaluated job profiles and ranking results
 - optional raw and validation JSON artifacts
 - a collection validation step that compares facet-based collection with unfiltered pagination collection
 
@@ -43,6 +43,12 @@ Run the single project entrypoint:
 
 ```bash
 .venv/bin/python app/job_hunter.py
+```
+
+Rerank existing job profile JSON files without refetching:
+
+```bash
+.venv/bin/python app/rerank_jobs.py
 ```
 
 Fetch a specific source:
@@ -82,10 +88,24 @@ Write all optional debug artifacts as well:
 - `--company <slug>`: source/company slug to fetch. Defaults to `sioux`.
 - `--candidate-profile <path>` / `--cv <path>`: candidate profile JSON or CV source file used for ranking. Non-JSON inputs are extracted once and persisted under `data/candidate_profiles/`.
 - evaluated job profiles are always written under `data/job_profiles/<company>/evaluated/`.
-- match artifacts are written under `data/job_profiles/<company>/match/` only when the ranking score is at least `0.6`.
 - `--write-raw`: also write per-job raw artifacts under `data/job_profiles/<company>/raw/`.
-- `--write-evaluated`: deprecated compatibility flag; evaluated and match artifacts are already written by default.
+- `--write-evaluated`: deprecated compatibility flag; evaluated artifacts are already written by default.
 - `--write-validation`: write the collection validation artifact.
+
+### Rerank Existing Jobs
+
+Rerank a single evaluated job JSON against a single candidate profile JSON:
+
+```bash
+.venv/bin/python app/rerank_jobs.py \
+  --job-profile data/job_profiles/sioux/evaluated/example.json \
+  --candidate-profile data/candidate_profiles/Ibrahim_Saad_CV.json
+```
+
+If no arguments are provided, the rerank command falls back to:
+
+- `data/job_profiles/sioux/evaluated/*.json`
+- `data/candidate_profiles/*.json`
 
 ## Output Files
 
@@ -96,11 +116,11 @@ Candidate profiles are written under `data/candidate_profiles/`.
 Job profiles are written under `data/job_profiles/<company>/`.
 
 - `evaluated/<job_title>__<url_hash>.json`: one evaluated job profile per extracted vacancy, written before ranking.
-- `match/<job_title>__<url_hash>.json`: the same job payload plus embedded ranking metadata, written only when the ranking score is at least `0.6`.
 
-Ranking files are written under `data/rankings/`.
+Ranking files are written under `data/job_profiles/<company>/rankings/`.
 
-- `<candidate_id>_<job_id>.json`: one ranking result per extracted job, written immediately after that job is ranked.
+- `rankings/match/<candidate_id>_<job_id>.json`: one ranking result per matched job.
+- `rankings/mismatch/<candidate_id>_<job_id>.json`: one ranking result per mismatched job.
 
 Optional files:
 

@@ -180,11 +180,16 @@ def _fake_ranking_result(
     *,
     score: float = 0.91,
     candidate_id: str = "Ibrahim_Saad_CV",
+    status: str = "match",
+    decision_stage: str = "ranking",
+    rejection_reasons: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     return {
         "job_id": job.job_id,
         "candidate_id": candidate_id,
         "score": score,
+        "status": status,
+        "decision_stage": decision_stage,
         "bucket_scores": {
             "skills": score,
             "languages": 0.8,
@@ -196,14 +201,22 @@ def _fake_ranking_result(
         },
         "matched_features": [],
         "missing_features": [],
+        "rejection_reasons": rejection_reasons or [],
     }
 
 
 def _patch_ranker(monkeypatch, *, messages: list[str] | None = None) -> None:
-    def fake_rank_job(candidate_profile, job, *, index=None, log_message):
+    def fake_rank_job(
+        candidate_profile,
+        job,
+        *,
+        match_score_threshold=None,
+        index=None,
+        log_message,
+    ):
         if messages is not None:
             log_message(
-                f"RANK [{index}] 'Controls Engineer' | score=0.910 | "
+                f"RANK [{index}] 'Controls Engineer' | status=match | stage=ranking | reason=none | score=0.910 | "
                 "skills=0.910 | languages=0.800 | protocols=0.700 | "
                 "standards=0.000 | domains=0.600 | seniority=0.900 | "
                 "years_experience=0.800"
@@ -416,8 +429,7 @@ def test_fetch_source_jobs_writes_rankings_by_default(monkeypatch) -> None:
     validation_writes: list[tuple[dict[str, object], str, object]] = []
     raw_writes: list[tuple[dict[str, object], str, object]] = []
     evaluated_writes: list[tuple[dict[str, object], str, object]] = []
-    match_writes: list[tuple[dict[str, object], str, object]] = []
-    ranking_writes: list[tuple[dict[str, object], object]] = []
+    ranking_writes: list[tuple[dict[str, object], str, object]] = []
 
     monkeypatch.setattr(job_hunter, "log", messages.append)
     _patch_ranker(monkeypatch, messages=messages)
@@ -445,14 +457,23 @@ def test_fetch_source_jobs_writes_rankings_by_default(monkeypatch) -> None:
     monkeypatch.setattr(
         job_hunter.report_writer,
         "write_match_job",
-        lambda payload, *, company_slug, log_message: match_writes.append(
-            (payload, company_slug, log_message)
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy match job artifacts should not be written")
+        ),
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_mismatch_job",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy mismatch job artifacts should not be written")
         ),
     )
     monkeypatch.setattr(
         job_hunter.report_writer,
         "write_ranking_result",
-        lambda payload, *, log_message: ranking_writes.append((payload, log_message)),
+        lambda payload, *, company_slug, log_message: ranking_writes.append(
+            (payload, company_slug, log_message)
+        ),
     )
 
     result = job_hunter.fetch_source_jobs(
@@ -474,12 +495,10 @@ def test_fetch_source_jobs_writes_rankings_by_default(monkeypatch) -> None:
     assert len(evaluated_writes) == 1
     assert evaluated_writes[0][0]["job_id"] == "controls_engineer__test123456"
     assert "ranking" not in evaluated_writes[0][0]
-    assert len(match_writes) == 1
-    assert match_writes[0][0]["job_id"] == "controls_engineer__test123456"
-    assert match_writes[0][0]["ranking"]["candidate_id"] == "Ibrahim_Saad_CV"
     assert len(ranking_writes) == 1
     assert ranking_writes[0][0]["job_id"] == "controls_engineer__test123456"
     assert ranking_writes[0][0]["candidate_id"] == "Ibrahim_Saad_CV"
+    assert ranking_writes[0][1] == "sioux"
     assert parser.calls == [
         (
             browser.context.page,
@@ -497,7 +516,12 @@ def test_fetch_source_jobs_writes_rankings_by_default(monkeypatch) -> None:
     assert browser.context.closed is True
     assert messages[0] == "fetch progress: [1/2]"
     assert "fetch progress: [2/2]" in messages
-    assert any(message.startswith("RANK [1] 'Controls Engineer' | score=0.910") for message in messages)
+    assert any(
+        message.startswith(
+            "RANK [1] 'Controls Engineer' | status=match | stage=ranking | reason=none | score=0.910"
+        )
+        for message in messages
+    )
     assert messages[-1] == "closing browser after fetching 1 jobs"
 
 
@@ -518,7 +542,6 @@ def test_fetch_source_jobs_writes_requested_debug_artifacts(monkeypatch) -> None
     browser = FakeBrowser()
     raw_writes: list[dict[str, object]] = []
     evaluated_writes: list[dict[str, object]] = []
-    match_writes: list[dict[str, object]] = []
     ranking_writes: list[dict[str, object]] = []
 
     _patch_ranker(monkeypatch)
@@ -535,7 +558,16 @@ def test_fetch_source_jobs_writes_requested_debug_artifacts(monkeypatch) -> None
     monkeypatch.setattr(
         job_hunter.report_writer,
         "write_match_job",
-        lambda payload, **_: match_writes.append(payload),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy match job artifacts should not be written")
+        ),
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_mismatch_job",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy mismatch job artifacts should not be written")
+        ),
     )
     monkeypatch.setattr(
         job_hunter.report_writer,
@@ -557,9 +589,6 @@ def test_fetch_source_jobs_writes_requested_debug_artifacts(monkeypatch) -> None
     assert len(evaluated_writes) == 1
     assert evaluated_writes[0]["job_id"] == "controls_engineer__test123456"
     assert "ranking" not in evaluated_writes[0]
-    assert len(match_writes) == 1
-    assert match_writes[0]["job_id"] == "controls_engineer__test123456"
-    assert match_writes[0]["ranking"]["candidate_id"] == "Ibrahim_Saad_CV"
     assert len(ranking_writes) == 1
     assert ranking_writes[0]["job_id"] == "controls_engineer__test123456"
     assert ranking_writes[0]["candidate_id"] == "Ibrahim_Saad_CV"
@@ -582,7 +611,6 @@ def test_fetch_source_jobs_skips_match_artifact_below_threshold(monkeypatch) -> 
     browser = FakeBrowser()
     messages: list[str] = []
     evaluated_writes: list[dict[str, object]] = []
-    match_writes: list[dict[str, object]] = []
     ranking_writes: list[dict[str, object]] = []
 
     monkeypatch.setattr(job_hunter, "log", messages.append)
@@ -597,6 +625,17 @@ def test_fetch_source_jobs_skips_match_artifact_below_threshold(monkeypatch) -> 
                 url="https://example.com/jobs/controls",
             ),
             score=0.59,
+            status="mismatch",
+            decision_stage="ranking",
+            rejection_reasons=[
+                {
+                    "stage": "ranking",
+                    "bucket": "score",
+                    "reason": "score_below_threshold",
+                    "expected": ">=0.600",
+                    "actual": "0.590",
+                }
+            ],
         ),
     )
     monkeypatch.setattr(
@@ -607,7 +646,16 @@ def test_fetch_source_jobs_skips_match_artifact_below_threshold(monkeypatch) -> 
     monkeypatch.setattr(
         job_hunter.report_writer,
         "write_match_job",
-        lambda payload, **_: match_writes.append(payload),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy match job artifacts should not be written")
+        ),
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_mismatch_job",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy mismatch job artifacts should not be written")
+        ),
     )
     monkeypatch.setattr(
         job_hunter.report_writer,
@@ -625,8 +673,86 @@ def test_fetch_source_jobs_skips_match_artifact_below_threshold(monkeypatch) -> 
     assert len(evaluated_writes) == 1
     assert len(ranking_writes) == 1
     assert ranking_writes[0]["score"] == 0.59
-    assert match_writes == []
+    assert ranking_writes[0]["decision_stage"] == "ranking"
     assert any(message == "skip match: job_id='controls_engineer__test123456' | score=0.590 < 0.600" for message in messages)
+
+
+def test_fetch_source_jobs_writes_mismatch_artifact_for_hard_filter(monkeypatch) -> None:
+    retrieval = SourceRetrievalResult(
+        job_links=["https://example.com/jobs/controls"],
+        discipline_map={},
+        validation_report={},
+    )
+    source = SourceDefinition(
+        company_slug="sioux",
+        source_url="https://example.com/jobs",
+        configured_countries=("Netherlands",),
+        configured_languages=("en",),
+        adapter=FakeAdapter(retrieval),
+        parser=FakeParser(),
+    )
+    browser = FakeBrowser()
+    messages: list[str] = []
+    monkeypatch.setattr(job_hunter, "log", messages.append)
+    monkeypatch.setattr(
+        job_hunter,
+        "rank_job",
+        lambda *_args, **_kwargs: _fake_ranking_result(
+            FakeJob(
+                job_id="controls_engineer__test123456",
+                title="Controls Engineer",
+                description_text="Build control software.",
+                url="https://example.com/jobs/controls",
+            ),
+            score=0.0,
+            status="mismatch",
+            decision_stage="job_must_have",
+            rejection_reasons=[
+                {
+                    "stage": "job_must_have",
+                    "bucket": "skills",
+                    "reason": "required_feature_missing",
+                    "expected": "python",
+                    "actual": None,
+                }
+            ],
+        ),
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_evaluated_job",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_match_job",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy match job artifacts should not be written")
+        ),
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_mismatch_job",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy mismatch job artifacts should not be written")
+        ),
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_ranking_result",
+        lambda *_args, **_kwargs: None,
+    )
+
+    job_hunter.fetch_source_jobs(
+        browser,
+        source,
+        candidate_profile=_fake_candidate_profile(),
+    )
+
+    assert any(
+        message == "skip match: job_id='controls_engineer__test123456' | stage=job_must_have | reason=required_feature_missing"
+        for message in messages
+    )
 
 
 def test_fetch_source_jobs_passes_job_limit_to_adapter(monkeypatch) -> None:

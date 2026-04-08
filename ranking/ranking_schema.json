@@ -8,9 +8,12 @@
     "job_id",
     "candidate_id",
     "score",
+    "status",
+    "decision_stage",
     "bucket_scores",
     "matched_features",
-    "missing_features"
+    "missing_features",
+    "rejection_reasons"
   ],
   "properties": {
     "job_id": {
@@ -23,6 +26,19 @@
       "type": "number",
       "minimum": 0,
       "maximum": 1
+    },
+    "status": {
+      "enum": [
+        "match",
+        "mismatch"
+      ]
+    },
+    "decision_stage": {
+      "enum": [
+        "candidate_must_have",
+        "job_must_have",
+        "ranking"
+      ]
     },
     "bucket_scores": {
       "type": "object",
@@ -85,6 +101,12 @@
       "items": {
         "$ref": "#/$defs/featureGap"
       }
+    },
+    "rejection_reasons": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/rejectionReason"
+      }
     }
   },
   "$defs": {
@@ -138,6 +160,44 @@
         },
         "job_value": {
           "type": "string"
+        }
+      }
+    },
+    "rejectionReason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "bucket",
+        "reason",
+        "expected",
+        "actual"
+      ],
+      "properties": {
+        "stage": {
+          "enum": [
+            "candidate_must_have",
+            "job_must_have",
+            "ranking"
+          ]
+        },
+        "bucket": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "expected": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "actual": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     }

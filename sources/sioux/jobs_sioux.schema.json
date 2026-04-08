@@ -297,6 +297,56 @@
         }
       }
     },
+    "jobConstraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "bucket",
+        "value",
+        "min_years",
+        "confidence",
+        "evidence",
+        "source_kind"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "feature",
+            "seniority",
+            "years_experience",
+            "restriction"
+          ]
+        },
+        "bucket": {
+          "enum": [
+            "skills",
+            "languages",
+            "protocols",
+            "standards",
+            "domains",
+            "seniority",
+            "years_experience",
+            "restrictions"
+          ]
+        },
+        "value": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "min_years": {
+          "$ref": "#/$defs/nullableInteger"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidenceScore"
+        },
+        "evidence": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/nullableSourceKind"
+        }
+      }
+    },
     "llmExtraction": {
       "type": "object",
       "additionalProperties": false,
@@ -475,6 +525,7 @@
         "standards",
         "industry_domains",
         "domains",
+        "job_constraints",
         "workplace_type",
         "fulltime_parttime",
         "min_hours_per_week",
@@ -553,6 +604,12 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/jobFeatureItem"
+          }
+        },
+        "job_constraints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/jobConstraint"
           }
         },
         "workplace_type": {

@@ -46,6 +46,20 @@ _STRENGTH_RANK = {
     "core": 3,
 }
 
+
+def _normalize_workplace_type(value: str) -> str:
+    normalized = normalize_taxonomy_name(value)
+    if not normalized:
+        return ""
+    if "hybrid" in normalized:
+        return "Hybrid"
+    if "remote" in normalized or "work from home" in normalized or "home office" in normalized:
+        return "Remote"
+    if any(token in normalized for token in ("on-site", "onsite", "on site", "office")):
+        return "On-site"
+    return normalize_text(value)
+
+
 def _clean_confidence_score(value: Any) -> float:
     parsed_value = value
     if isinstance(parsed_value, str):
@@ -213,14 +227,26 @@ class CandidateProfileCandidateConstraints(CandidateProfileEvidenceBackedItem):
     @field_validator(
         "preferred_locations",
         "excluded_locations",
-        "preferred_workplace_types",
-        "excluded_workplace_types",
         "notes",
         mode="after",
     )
     @classmethod
     def clean_list_fields(cls, values: List[str]) -> List[str]:
         return normalize_and_dedupe_texts(values)
+
+    @field_validator(
+        "preferred_workplace_types",
+        "excluded_workplace_types",
+        mode="after",
+    )
+    @classmethod
+    def clean_workplace_types(cls, values: List[str]) -> List[str]:
+        cleaned_values = [
+            _normalize_workplace_type(value)
+            for value in values
+            if _normalize_workplace_type(value)
+        ]
+        return normalize_and_dedupe_texts(cleaned_values)
 
     @model_validator(mode="after")
     def validate_item(self) -> "CandidateProfileCandidateConstraints":

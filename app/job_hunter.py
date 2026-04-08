@@ -13,8 +13,7 @@ What it does:
 - extracts useful fields
 - writes one evaluated job profile per vacancy under data/job_profiles/<company>/evaluated
 - ranks all extracted jobs against the selected candidate profile
-- writes per-job ranking files under data/rankings
-- writes per-job match artifacts under data/job_profiles/<company>/match when score >= 0.6
+- writes per-job ranking files under data/job_profiles/<company>/rankings/{match,mismatch}
 - optionally writes raw state files
 - optionally writes the collection validation report under data/job_profiles/<company>
 """
@@ -22,9 +21,7 @@ What it does:
 from __future__ import annotations
 
 import argparse
-import json
 import os
-import re
 import sys
 import time
 from dataclasses import asdict, dataclass
@@ -49,6 +46,7 @@ bootstrap_project_root()
 
 from playwright.sync_api import sync_playwright
 
+from app import job_hunter_core
 from candidate_profile.llm.profile import (
     CandidateProfileDocument,
     compute_source_text_hash,
@@ -62,13 +60,9 @@ from reporting import writer as report_writer
 from sources.base import SourceDefinition
 from sources.registry import get_source, list_available_sources
 
-DEFAULT_CANDIDATE_PROFILE_DIR = Path("data/candidate_profiles")
-DEFAULT_CANDIDATE_PROFILE_PATH = next(
-    iter(sorted(DEFAULT_CANDIDATE_PROFILE_DIR.glob("*.json"))),
-    DEFAULT_CANDIDATE_PROFILE_DIR / "Ibrahim_Saad_CV.json",
-)
-DEFAULT_MATCH_SCORE_THRESHOLD = 0.6
-_CANDIDATE_PROFILE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
+DEFAULT_CANDIDATE_PROFILE_DIR = job_hunter_core.DEFAULT_CANDIDATE_PROFILE_DIR
+DEFAULT_CANDIDATE_PROFILE_PATH = job_hunter_core.DEFAULT_CANDIDATE_PROFILE_PATH
+DEFAULT_MATCH_SCORE_THRESHOLD = job_hunter_core.DEFAULT_MATCH_SCORE_THRESHOLD
 
 
 @dataclass
@@ -114,7 +108,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--write-evaluated",
         action="store_true",
-        help="Deprecated compatibility flag; evaluated and match artifacts are written by default.",
+        help="Deprecated compatibility flag; evaluated artifacts are written by default.",
     )
     parser.add_argument(
         "--write-validation",
@@ -134,68 +128,15 @@ def load_candidate_profile(
     *,
     log_message: Callable[[str], None] | None = None,
 ) -> CandidateProfileDocument:
-    profile_path = Path(candidate_profile_path)
-    if profile_path.suffix.lower() != ".json":
-        return _extract_candidate_profile_from_source(
-            profile_path,
-            log_message=log_message,
-        )
-
-    with profile_path.open("r", encoding="utf-8") as file_handle:
-        payload = json.load(file_handle)
-
-    if "candidate_id" not in payload:
-        payload["candidate_id"] = profile_path.stem
-
-    return CandidateProfileDocument.model_validate(payload)
-
-
-def _candidate_profile_stem(path: Path | str) -> str:
-    source_path = Path(path)
-    stem = _CANDIDATE_PROFILE_FILENAME_RE.sub("_", source_path.stem).strip("._")
-    return stem or "candidate_profile"
-
-
-def _candidate_profile_output_path_for(source_path: Path | str) -> Path:
-    return DEFAULT_CANDIDATE_PROFILE_DIR / f"{_candidate_profile_stem(source_path)}.json"
-
-
-def _extract_candidate_profile_from_source(
-    source_path: Path | str,
-    *,
-    log_message: Callable[[str], None] | None = None,
-) -> CandidateProfileDocument:
-    resolved_source_path = Path(source_path)
-    candidate_profile_path = _candidate_profile_output_path_for(resolved_source_path)
-    profile_text = convert_to_text(resolved_source_path)
-    source_text_hash = compute_source_text_hash(profile_text)
-
-    if candidate_profile_path.exists():
-        existing_profile = load_candidate_profile(candidate_profile_path)
-        if existing_profile.source_text_hash == source_text_hash:
-            if log_message is not None:
-                log_message(f"reusing candidate profile: {candidate_profile_path}")
-            return existing_profile
-
-    candidate_profile = extract_profile(
-        profile_text,
-        candidate_id=_candidate_profile_stem(resolved_source_path),
-    )
-    report_writer.write_candidate_profile(
-        candidate_profile.model_dump(mode="json"),
-        output_path=candidate_profile_path,
+    return job_hunter_core.load_candidate_profile(
+        candidate_profile_path,
+        default_candidate_profile_dir=DEFAULT_CANDIDATE_PROFILE_DIR,
+        compute_source_text_hash_fn=compute_source_text_hash,
+        extract_profile_fn=extract_profile,
+        convert_to_text_fn=convert_to_text,
+        write_candidate_profile_fn=report_writer.write_candidate_profile,
         log_message=log_message,
     )
-    return candidate_profile
-
-
-def _build_evaluated_job_payload(
-    job: Any,
-    ranking_result: dict[str, Any],
-) -> dict[str, Any]:
-    payload = asdict(job)
-    payload["ranking"] = ranking_result
-    return payload
 
 
 def fetch_source_jobs(
@@ -256,28 +197,35 @@ def fetch_source_jobs(
                     company_slug=source.company_slug,
                     log_message=log,
                 )
-                ranking_result = rank_job(
-                    candidate_profile,
-                    job,
+                ranking_result = job_hunter_core.rank_and_write_job_artifacts(
+                    candidate_profile=candidate_profile,
+                    job=job,
+                    job_payload=raw_job_payload,
+                    company_slug=source.company_slug,
+                    rank_job_fn=rank_job,
+                    writer=report_writer,
+                    match_score_threshold=DEFAULT_MATCH_SCORE_THRESHOLD,
                     index=len(ranking_results) + 1,
                     log_message=log,
                 )
-                report_writer.write_ranking_result(
-                    ranking_result,
-                    log_message=log,
-                )
-                if ranking_result["score"] >= DEFAULT_MATCH_SCORE_THRESHOLD:
-                    report_writer.write_match_job(
-                        _build_evaluated_job_payload(job, ranking_result),
-                        company_slug=source.company_slug,
-                        log_message=log,
-                    )
-                else:
-                    log(
-                        f"skip match: job_id='{job.job_id}' | "
-                        f"score={ranking_result['score']:.3f} < "
-                        f"{DEFAULT_MATCH_SCORE_THRESHOLD:.3f}"
-                    )
+                if ranking_result["status"] != "match":
+                    if ranking_result["decision_stage"] == "ranking":
+                        log(
+                            f"skip match: job_id='{job.job_id}' | "
+                            f"score={ranking_result['score']:.3f} < "
+                            f"{DEFAULT_MATCH_SCORE_THRESHOLD:.3f}"
+                        )
+                    else:
+                        reason = (
+                            ranking_result["rejection_reasons"][0]["reason"]
+                            if ranking_result["rejection_reasons"]
+                            else "unknown"
+                        )
+                        log(
+                            f"skip match: job_id='{job.job_id}' | "
+                            f"stage={ranking_result['decision_stage']} | "
+                            f"reason={reason}"
+                        )
                 ranking_results.append(ranking_result)
                 ranked_jobs.append(job)
             except Exception as error:
