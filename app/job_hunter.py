@@ -6,15 +6,15 @@ Company jobs fetcher and ranker.
 
 What it does:
 - resolves the requested company source from the registry
-- reuses or builds the selected candidate profile once
+- reuses or builds the selected candidate profile once unless raw-only mode is used
 - opens the company vacancies overview page
 - collects vacancy detail links
 - visits each vacancy page
 - extracts useful fields
+- optionally writes raw state files
 - writes one evaluated job profile per vacancy under data/job_profiles/<company>/evaluated
 - ranks all extracted jobs against the selected candidate profile
 - writes per-job ranking files under data/job_profiles/<company>/rankings/{match,mismatch}
-- optionally writes raw state files
 - optionally writes the collection validation report under data/job_profiles/<company>
 """
 
@@ -103,7 +103,18 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--write-raw",
         action="store_true",
-        help="Also write duplicate per-job raw artifacts under data/job_profiles/<company>/raw.",
+        help=(
+            "Also write raw artifacts: structured JSON under "
+            "data/job_profiles/<company>/raw_structured and page HTML under "
+            "data/job_profiles/<company>/raw."
+        ),
+    )
+    parser.add_argument(
+        "--raw-only",
+        action="store_true",
+        help=(
+            "Fetch and write only raw artifacts, skipping evaluated outputs and ranking."
+        ),
     )
     parser.add_argument(
         "--write-evaluated",
@@ -139,15 +150,23 @@ def load_candidate_profile(
     )
 
 
+def _capture_page_html(page: Any) -> str | None:
+    try:
+        return page.content()
+    except Exception:
+        return None
+
+
 def fetch_source_jobs(
     browser: Any,
     source: SourceDefinition,
     *,
-    candidate_profile: CandidateProfileDocument,
+    candidate_profile: CandidateProfileDocument | None,
     job_limit: int | None = None,
     write_raw_jobs: bool = False,
     write_evaluated_jobs: bool = False,
     write_validation_report: bool = False,
+    raw_only: bool = False,
 ) -> FetchSourceJobsResult:
     retrieval = source.adapter.retrieve_job_links(
         browser,
@@ -174,7 +193,11 @@ def fetch_source_jobs(
         for idx, url in enumerate(job_links, start=1):
             log(f"fetch progress: [{idx}/{len(job_links)}]")
             try:
-                job = source.parser.fetch_job(
+                parser_fetch = source.parser.fetch_job
+                if raw_only:
+                    parser_fetch = getattr(source.parser, "fetch_raw_job", parser_fetch)
+
+                job = parser_fetch(
                     detail_page,
                     url,
                     discipline_map.get(url, []),
@@ -187,11 +210,23 @@ def fetch_source_jobs(
                 jobs.append(job)
 
                 if write_raw_jobs:
+                    raw_html_content = _capture_page_html(detail_page)
                     report_writer.write_raw_job(
                         raw_job_payload,
                         company_slug=source.company_slug,
                         log_message=log,
                     )
+                    if raw_html_content is not None:
+                        report_writer.write_raw_html(
+                            raw_html_content,
+                            title=getattr(job, "title", None),
+                            url=getattr(job, "url", None),
+                            company_slug=source.company_slug,
+                            log_message=log,
+                        )
+                if raw_only:
+                    continue
+
                 report_writer.write_evaluated_job(
                     raw_job_payload,
                     company_slug=source.company_slug,
@@ -248,10 +283,14 @@ def main(argv: Sequence[str] | None = None) -> None:
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
 
-    candidate_profile = load_candidate_profile(
-        args.candidate_profile,
-        log_message=log,
-    )
+    raw_only = args.raw_only
+    write_raw_jobs = args.write_raw or raw_only
+    candidate_profile = None
+    if not raw_only:
+        candidate_profile = load_candidate_profile(
+            args.candidate_profile,
+            log_message=log,
+        )
     started_at = time.time()
     log("program started")
 
@@ -263,9 +302,10 @@ def main(argv: Sequence[str] | None = None) -> None:
                 source,
                 candidate_profile=candidate_profile,
                 job_limit=args.job_limit,
-                write_raw_jobs=args.write_raw,
+                write_raw_jobs=write_raw_jobs,
                 write_evaluated_jobs=args.write_evaluated,
                 write_validation_report=args.write_validation,
+                raw_only=raw_only,
             )
 
     elapsed = time.time() - started_at

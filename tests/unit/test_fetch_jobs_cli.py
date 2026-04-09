@@ -38,6 +38,7 @@ def test_parse_args_defaults_to_optional_outputs_disabled() -> None:
     assert args.candidate_profile == job_hunter.DEFAULT_CANDIDATE_PROFILE_PATH
     assert args.job_limit is None
     assert args.write_raw is False
+    assert args.raw_only is False
     assert args.write_evaluated is False
     assert args.write_validation is False
 
@@ -68,6 +69,7 @@ def test_parse_args_accepts_optional_output_flags() -> None:
             "--company",
             "sioux",
             "--write-raw",
+            "--raw-only",
             "--write-evaluated",
             "--write-validation",
         ]
@@ -75,6 +77,7 @@ def test_parse_args_accepts_optional_output_flags() -> None:
 
     assert args.company == "sioux"
     assert args.write_raw is True
+    assert args.raw_only is True
     assert args.write_evaluated is True
     assert args.write_validation is True
 
@@ -101,6 +104,27 @@ class FakeParser:
         self.calls.append((page, url, disciplines or [], log_message))
         if url.endswith("/skip"):
             return None
+        return FakeJob(
+            job_id="controls_engineer__test123456",
+            title="Controls Engineer",
+            description_text="Build control software.",
+            url=url,
+        )
+
+
+class RawAwareFakeParser(FakeParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.raw_calls: list[tuple[object, str, list[str], object]] = []
+
+    def fetch_raw_job(
+        self,
+        page: object,
+        url: str,
+        disciplines: list[str] | None = None,
+        log_message=None,
+    ) -> FakeJob | None:
+        self.raw_calls.append((page, url, disciplines or [], log_message))
         return FakeJob(
             job_id="controls_engineer__test123456",
             title="Controls Engineer",
@@ -148,7 +172,8 @@ class FakeAdapter:
 
 
 class FakePage:
-    pass
+    def content(self) -> str:
+        return "<html><body>Controls Engineer</body></html>"
 
 
 class FakeContext:
@@ -428,6 +453,7 @@ def test_fetch_source_jobs_writes_rankings_by_default(monkeypatch) -> None:
     messages: list[str] = []
     validation_writes: list[tuple[dict[str, object], str, object]] = []
     raw_writes: list[tuple[dict[str, object], str, object]] = []
+    raw_html_writes: list[tuple[str, str | None, str | None, str, object]] = []
     evaluated_writes: list[tuple[dict[str, object], str, object]] = []
     ranking_writes: list[tuple[dict[str, object], str, object]] = []
 
@@ -445,6 +471,13 @@ def test_fetch_source_jobs_writes_rankings_by_default(monkeypatch) -> None:
         "write_raw_job",
         lambda payload, *, company_slug, log_message: raw_writes.append(
             (payload, company_slug, log_message)
+        ),
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_raw_html",
+        lambda html_content, *, title, url, company_slug, log_message: raw_html_writes.append(
+            (html_content, title, url, company_slug, log_message)
         ),
     )
     monkeypatch.setattr(
@@ -492,6 +525,7 @@ def test_fetch_source_jobs_writes_rankings_by_default(monkeypatch) -> None:
     assert adapter.logged_reports == [validation_report]
     assert validation_writes == []
     assert raw_writes == []
+    assert raw_html_writes == []
     assert len(evaluated_writes) == 1
     assert evaluated_writes[0][0]["job_id"] == "controls_engineer__test123456"
     assert "ranking" not in evaluated_writes[0][0]
@@ -541,6 +575,7 @@ def test_fetch_source_jobs_writes_requested_debug_artifacts(monkeypatch) -> None
     )
     browser = FakeBrowser()
     raw_writes: list[dict[str, object]] = []
+    raw_html_writes: list[tuple[str, str | None, str | None]] = []
     evaluated_writes: list[dict[str, object]] = []
     ranking_writes: list[dict[str, object]] = []
 
@@ -549,6 +584,13 @@ def test_fetch_source_jobs_writes_requested_debug_artifacts(monkeypatch) -> None
         job_hunter.report_writer,
         "write_raw_job",
         lambda payload, **_: raw_writes.append(payload),
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_raw_html",
+        lambda html_content, *, title, url, **_: raw_html_writes.append(
+            (html_content, title, url)
+        ),
     )
     monkeypatch.setattr(
         job_hunter.report_writer,
@@ -586,12 +628,148 @@ def test_fetch_source_jobs_writes_requested_debug_artifacts(monkeypatch) -> None
     assert len(raw_writes) == 1
     assert raw_writes[0]["job_id"] == "controls_engineer__test123456"
     assert raw_writes[0]["url"] == "https://example.com/jobs/controls"
+    assert raw_html_writes == [
+        (
+            "<html><body>Controls Engineer</body></html>",
+            "Controls Engineer",
+            "https://example.com/jobs/controls",
+        )
+    ]
     assert len(evaluated_writes) == 1
     assert evaluated_writes[0]["job_id"] == "controls_engineer__test123456"
     assert "ranking" not in evaluated_writes[0]
     assert len(ranking_writes) == 1
     assert ranking_writes[0]["job_id"] == "controls_engineer__test123456"
     assert ranking_writes[0]["candidate_id"] == "Ibrahim_Saad_CV"
+
+
+def test_fetch_source_jobs_raw_only_skips_evaluated_and_ranking(monkeypatch) -> None:
+    retrieval = SourceRetrievalResult(
+        job_links=["https://example.com/jobs/controls"],
+        discipline_map={"https://example.com/jobs/controls": ["Control"]},
+        validation_report={},
+    )
+    source = SourceDefinition(
+        company_slug="sioux",
+        source_url="https://example.com/jobs",
+        configured_countries=("Netherlands",),
+        configured_languages=("en",),
+        adapter=FakeAdapter(retrieval),
+        parser=FakeParser(),
+    )
+    browser = FakeBrowser()
+    raw_writes: list[dict[str, object]] = []
+    raw_html_writes: list[tuple[str, str | None, str | None]] = []
+
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_raw_job",
+        lambda payload, **_: raw_writes.append(payload),
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_raw_html",
+        lambda html_content, *, title, url, **_: raw_html_writes.append(
+            (html_content, title, url)
+        ),
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_evaluated_job",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("evaluated artifacts should not be written in raw-only mode")
+        ),
+    )
+    monkeypatch.setattr(
+        job_hunter,
+        "rank_job",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("ranking should not run in raw-only mode")
+        ),
+    )
+
+    result = job_hunter.fetch_source_jobs(
+        browser,
+        source,
+        candidate_profile=None,
+        write_raw_jobs=True,
+        raw_only=True,
+    )
+
+    assert [job.url for job in result.jobs] == ["https://example.com/jobs/controls"]
+    assert result.ranking_results == []
+    assert result.ranked_jobs == []
+    assert len(raw_writes) == 1
+    assert raw_writes[0]["job_id"] == "controls_engineer__test123456"
+    assert raw_html_writes == [
+        (
+            "<html><body>Controls Engineer</body></html>",
+            "Controls Engineer",
+            "https://example.com/jobs/controls",
+        )
+    ]
+
+
+def test_fetch_source_jobs_raw_only_prefers_fetch_raw_job_when_available(
+    monkeypatch,
+) -> None:
+    retrieval = SourceRetrievalResult(
+        job_links=["https://example.com/jobs/controls"],
+        discipline_map={"https://example.com/jobs/controls": ["Control"]},
+        validation_report={},
+    )
+    parser = RawAwareFakeParser()
+    source = SourceDefinition(
+        company_slug="sioux",
+        source_url="https://example.com/jobs",
+        configured_countries=("Netherlands",),
+        configured_languages=("en",),
+        adapter=FakeAdapter(retrieval),
+        parser=parser,
+    )
+    browser = FakeBrowser()
+    raw_writes: list[dict[str, object]] = []
+    raw_html_writes: list[tuple[str, str | None, str | None]] = []
+
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_raw_job",
+        lambda payload, **_: raw_writes.append(payload),
+    )
+    monkeypatch.setattr(
+        job_hunter.report_writer,
+        "write_raw_html",
+        lambda html_content, *, title, url, **_: raw_html_writes.append(
+            (html_content, title, url)
+        ),
+    )
+
+    result = job_hunter.fetch_source_jobs(
+        browser,
+        source,
+        candidate_profile=None,
+        write_raw_jobs=True,
+        raw_only=True,
+    )
+
+    assert parser.calls == []
+    assert parser.raw_calls == [
+        (
+            browser.context.page,
+            "https://example.com/jobs/controls",
+            ["Control"],
+            job_hunter.log,
+        )
+    ]
+    assert [job.url for job in result.jobs] == ["https://example.com/jobs/controls"]
+    assert len(raw_writes) == 1
+    assert raw_html_writes == [
+        (
+            "<html><body>Controls Engineer</body></html>",
+            "Controls Engineer",
+            "https://example.com/jobs/controls",
+        )
+    ]
 
 
 def test_fetch_source_jobs_skips_match_artifact_below_threshold(monkeypatch) -> None:
@@ -990,10 +1168,72 @@ def test_main_loads_candidate_profile_and_logs_summary(monkeypatch) -> None:
             "write_raw_jobs": False,
             "write_evaluated_jobs": False,
             "write_validation_report": False,
+            "raw_only": False,
         }
     ]
     assert messages[0] == "program started"
     assert messages[-1] == "done: total_jobs=1 | ranked_jobs=1 | elapsed_seconds=0.00"
+
+
+def test_main_raw_only_skips_candidate_profile_load_and_forces_raw_writes(
+    monkeypatch,
+) -> None:
+    source = SourceDefinition(
+        company_slug="sioux",
+        source_url="https://example.com/jobs",
+        configured_countries=("Netherlands",),
+        configured_languages=("en",),
+        adapter=FakeAdapter(
+            SourceRetrievalResult(
+                job_links=[],
+                discipline_map={},
+                validation_report={},
+            )
+        ),
+        parser=FakeParser(),
+    )
+    fetch_kwargs: list[dict[str, object]] = []
+
+    monkeypatch.setattr(job_hunter, "get_source", lambda company: source)
+    monkeypatch.setattr(
+        job_hunter,
+        "load_candidate_profile",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("candidate profile load should be skipped in raw-only mode")
+        ),
+    )
+    monkeypatch.setattr(
+        job_hunter,
+        "fetch_source_jobs",
+        lambda browser, resolved_source, **kwargs: (
+            fetch_kwargs.append(kwargs)
+            or job_hunter.FetchSourceJobsResult(
+                jobs=[],
+                ranking_results=[],
+                ranked_jobs=[],
+            )
+        ),
+    )
+    monkeypatch.setattr(job_hunter, "sync_playwright", lambda: _yield(object()))
+    monkeypatch.setattr(
+        job_hunter,
+        "launched_chromium",
+        lambda playwright, *, headless=True: _yield(object()),
+    )
+    monkeypatch.setattr(job_hunter, "log", lambda _message: None)
+
+    job_hunter.main(["--company", "sioux", "--raw-only", "--job-limit", "1"])
+
+    assert fetch_kwargs == [
+        {
+            "candidate_profile": None,
+            "job_limit": 1,
+            "write_raw_jobs": True,
+            "write_evaluated_jobs": False,
+            "write_validation_report": False,
+            "raw_only": True,
+        }
+    ]
 
 
 def test_main_passes_validation_flag(monkeypatch) -> None:
@@ -1098,6 +1338,7 @@ def test_main_passes_debug_output_flags(monkeypatch) -> None:
             "write_raw_jobs": True,
             "write_evaluated_jobs": True,
             "write_validation_report": False,
+            "raw_only": False,
         }
     ]
 
@@ -1155,5 +1396,6 @@ def test_main_passes_job_limit_flag(monkeypatch) -> None:
             "write_raw_jobs": False,
             "write_evaluated_jobs": False,
             "write_validation_report": False,
+            "raw_only": False,
         }
     ]

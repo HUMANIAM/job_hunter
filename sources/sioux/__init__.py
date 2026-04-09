@@ -29,6 +29,15 @@ class SiouxSourceAdapter:
 
 
 class SiouxSourceParser:
+    def fetch_raw_job(
+        self,
+        page: Any,
+        url: str,
+        disciplines: list[str] | None = None,
+        log_message: Callable[[str], None] | None = None,
+    ) -> Any:
+        return sioux_parser.fetch_job_deterministic(page, url, disciplines, log_message)
+
     def fetch_job(
         self,
         page: Any,
