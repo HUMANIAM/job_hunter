@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "target_profile/target_profile.schema.json",
+  "title": "Target Profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "profile"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profile": {
+      "$ref": "#/$defs/targetProfile"
+    }
+  },
+  "$defs": {
+    "nonEmptyStringArray": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "setFilter": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "allowed": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "excluded": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        }
+      }
+    },
+    "targetProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "role_families": {
+          "$ref": "#/$defs/setFilter"
+        },
+        "locations": {
+          "$ref": "#/$defs/setFilter"
+        },
+        "workplace_types": {
+          "$ref": "#/$defs/setFilter"
+        },
+        "languages": {
+          "$ref": "#/$defs/setFilter"
+        },
+        "seniority_levels": {
+          "$ref": "#/$defs/setFilter"
+        },
+        "domains": {
+          "$ref": "#/$defs/setFilter"
+        },
+        "skills": {
+          "$ref": "#/$defs/setFilter"
+        },
+        "job_conditions": {
+          "$ref": "#/$defs/setFilter"
+        }
+      }
+    }
+  }
+}
