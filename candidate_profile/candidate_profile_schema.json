@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "candidate_profile/candidate_profile.schema.json",
+  "title": "Candidate Search Profile",
+  "description": "Schema for structured candidate profile extraction from CV/resume text.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "candidate_id",
+    "source_text_hash",
+    "schema_version",
+    "profile"
+  ],
+  "properties": {
+    "candidate_id": {
+      "type": "string"
+    },
+    "source_text_hash": {
+      "type": "string"
+    },
+    "schema_version": {
+      "type": "string"
+    },
+    "profile": {
+      "$ref": "#/$defs/candidateProfile"
+    }
+  },
+  "$defs": {
+    "nullableString": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "nullableInteger": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "confidenceScore": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "skillStrength": {
+      "enum": [
+        "core",
+        "strong",
+        "secondary",
+        "exposure"
+      ]
+    },
+    "languageLevel": {
+      "enum": [
+        "native",
+        "fluent",
+        "professional",
+        "conversational",
+        "basic",
+        "none",
+        null
+      ]
+    },
+    "seniorityHint": {
+      "enum": [
+        "junior",
+        "medior",
+        "senior",
+        "lead",
+        "principal",
+        "staff",
+        null
+      ]
+    },
+    "featureItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "strength",
+        "confidence",
+        "evidence"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "strength": {
+          "$ref": "#/$defs/skillStrength"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidenceScore"
+        },
+        "evidence": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "languageItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "level",
+        "confidence",
+        "evidence"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "level": {
+          "$ref": "#/$defs/languageLevel"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidenceScore"
+        },
+        "evidence": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "seniorityItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "confidence",
+        "evidence"
+      ],
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/seniorityHint"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidenceScore"
+        },
+        "evidence": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "yearsExperienceItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "confidence",
+        "evidence"
+      ],
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/nullableInteger"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidenceScore"
+        },
+        "evidence": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "candidateConstraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preferred_locations",
+        "excluded_locations",
+        "preferred_workplace_types",
+        "excluded_workplace_types",
+        "requires_visa_sponsorship",
+        "avoid_export_control_roles",
+        "notes",
+        "confidence",
+        "evidence"
+      ],
+      "properties": {
+        "preferred_locations": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "excluded_locations": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "preferred_workplace_types": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "excluded_workplace_types": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "requires_visa_sponsorship": {
+          "type": ["boolean", "null"]
+        },
+        "avoid_export_control_roles": {
+          "type": ["boolean", "null"]
+        },
+        "notes": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidenceScore"
+        },
+        "evidence": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "candidateProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "skills",
+        "languages",
+        "protocols",
+        "standards",
+        "domains",
+        "seniority",
+        "years_experience_total",
+        "candidate_constraints"
+      ],
+      "properties": {
+        "skills": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/featureItem"
+          }
+        },
+        "languages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/languageItem"
+          }
+        },
+        "protocols": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/featureItem"
+          }
+        },
+        "standards": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/featureItem"
+          }
+        },
+        "domains": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/featureItem"
+          }
+        },
+        "seniority": {
+          "$ref": "#/$defs/seniorityItem"
+        },
+        "years_experience_total": {
+          "$ref": "#/$defs/yearsExperienceItem"
+        },
+        "candidate_constraints": {
+          "$ref": "#/$defs/candidateConstraints"
+        }
+      }
+    }
+  }
+}

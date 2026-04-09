@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable
 
-from candidate_profile.llm.profile import (
+from candidate_profile.profile import (
     CandidateProfileDocument,
     compute_source_text_hash,
     extract_profile,

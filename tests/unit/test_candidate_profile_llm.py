@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from candidate_profile.llm.profile import (
+from candidate_profile.profile import (
     CANDIDATE_PROFILE_SCHEMA_VERSION,
     DEFAULT_CANDIDATE_PROFILE_LLM_MODEL,
     DEFAULT_CANDIDATE_PROFILE_MAX_COMPLETION_TOKENS,
@@ -93,7 +93,7 @@ def _profile_payload_dict() -> dict[str, object]:
 
 
 def test_candidate_profile_schema_matches_runtime_models() -> None:
-    schema_path = Path("candidate_profile/llm/candidate_profile_schema.json")
+    schema_path = Path("candidate_profile/candidate_profile_schema.json")
 
     with schema_path.open("r", encoding="utf-8") as file_handle:
         schema = json.load(file_handle)
