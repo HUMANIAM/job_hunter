@@ -9,7 +9,7 @@ Do not copy irrelevant job details.
 Do not output markdown.
 Do not output any text before or after the JSON.
 
-You must output exactly one JSON object that follows the JOB_ELIGIBILITY_PROFILE_SCHEMA below.
+You must output exactly one JSON object that matches the configured response schema.
 The output represents the job as a normalized eligibility view using the same schema shape as the candidate target profile, so both can be compared field by field later.
 
 Semantics:
@@ -58,6 +58,3 @@ Normalization rules:
 - Never place blocker conditions under "allowed".
 - Do not classify a job as software_engineering or embedded_software unless the job itself explicitly describes software implementation responsibilities.
 - Mentions of software as a neighboring discipline are not enough.
-
-JOB_ELIGIBILITY_PROFILE_SCHEMA:
-{{JOB_ELIGIBILITY_PROFILE_SCHEMA}}
