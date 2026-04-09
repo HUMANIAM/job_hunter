@@ -92,7 +92,14 @@ class JobEligibilityViewPayload(BaseModel):
 
 @lru_cache(maxsize=1)
 def _load_system_message() -> str:
-    return load_text_file(SYSTEM_MESSAGE_PATH)
+    template = load_text_file(SYSTEM_MESSAGE_PATH)
+    rendered_schema = _render_job_eligibility_profile_schema_json()
+    return render_template(
+        template,
+        {
+            "{{JOB_ELIGIBILITY_PROFILE_SCHEMA}}": rendered_schema,
+        },
+    )
 
 
 @lru_cache(maxsize=1)
@@ -101,23 +108,23 @@ def _load_user_template() -> str:
 
 
 @lru_cache(maxsize=1)
-def _load_target_profile_schema() -> Dict[str, Any]:
+def _load_job_eligibility_profile_schema() -> Dict[str, Any]:
     return load_json_file(SCHEMA_PATH)
 
 
-def _render_llm_output_schema_json() -> str:
-    root_schema = _load_target_profile_schema()
-    profile_schema = root_schema["$defs"]["targetProfile"]
+def _render_job_eligibility_profile_schema_json() -> str:
+    root_schema = _load_job_eligibility_profile_schema()
+    profile_schema = root_schema["$defs"]["jobEligibilityProfile"]
     return render_json(build_json_schema_example(profile_schema, root_schema))
 
 
 def render_job_eligibility_view_user_message(job_profile: Any) -> str:
     template = _load_user_template()
+    rendered_job_profile = render_json(job_profile)
     return render_template(
         template,
         {
-            "{{target_profile_schema_json}}": _render_llm_output_schema_json(),
-            "{{job_profile_json}}": render_json(job_profile),
+            "{{JOB_PROFILE}}": rendered_job_profile,
         },
     )
 
