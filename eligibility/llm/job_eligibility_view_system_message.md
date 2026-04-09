@@ -15,17 +15,28 @@ The output represents the job as a normalized eligibility view using the same sc
 Semantics:
 - Use only canonical normalized values.
 - Include only constrained aspects that are clearly supported by the job profile.
-- Omit unconstrained or unknown aspects entirely.
+- Omit unconstrained or unknown aspects entirely, or set the aspect to null if required by the schema.
 - For each aspect:
   - use "allowed" for what the job explicitly requires, clearly implies, or canonically maps to
   - use "excluded" only for job conditions that are present and would act as blockers from the candidate side
-- Do not emit empty arrays.
+- If you include an aspect object, include both "allowed" and "excluded" arrays.
+- Empty arrays are allowed.
 - Do not emit empty objects.
 - Do not invent fields outside the schema.
 
 Field intent:
 - role_families.allowed:
-  canonical role families the job belongs to, such as "software_engineering", "embedded_software", "backend_software", "mechanical_engineering"
+  must represent the primary function of the job (what the person is hired to do daily),
+  not the disciplines or technologies involved.
+
+  Examples:
+  - "System Tester" → system_testing (not mechanical_engineering)
+  - "Python Developer" → software_engineering
+  - "Mechanical Designer" → mechanical_engineering
+
+- Do not derive role family from required education, background, or disciplines.
+- Do not derive role family from technologies mentioned in the job.
+- If the job involves multiple disciplines, still choose the single primary role function.
 - locations.allowed:
   canonical location scope derived from the job, such as "netherlands"
 - workplace_types.allowed:
@@ -34,10 +45,6 @@ Field intent:
   languages required by the job
 - seniority_levels.allowed:
   seniority levels the job is asking for
-- domains.allowed:
-  canonical domains directly supported by the job
-- skills.allowed:
-  canonical skills that are clearly required by the job
 - job_conditions.excluded:
   blocker conditions explicitly present in the job that are not already represented by another field, such as "export_control_required", "visa_sponsorship_required", or "driving_license_required"
 
@@ -47,6 +54,10 @@ Normalization rules:
 - Normalize synonymous phrases to one canonical value
 - Prefer coarse stable categories over brittle literal phrases
 - If a field is unclear, omit it instead of guessing
+- job_conditions must use only "excluded".
+- Never place blocker conditions under "allowed".
+- Do not classify a job as software_engineering or embedded_software unless the job itself explicitly describes software implementation responsibilities.
+- Mentions of software as a neighboring discipline are not enough.
 
 JOB_ELIGIBILITY_PROFILE_SCHEMA:
 {{JOB_ELIGIBILITY_PROFILE_SCHEMA}}
