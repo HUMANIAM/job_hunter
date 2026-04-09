@@ -47,7 +47,7 @@ bootstrap_project_root()
 from playwright.sync_api import sync_playwright
 
 from app import job_hunter_core
-from candidate_profile.llm.profile import (
+from candidate_profile.profile import (
     CandidateProfileDocument,
     compute_source_text_hash,
     extract_profile,
