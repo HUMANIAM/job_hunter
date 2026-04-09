@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from openai import OpenAI
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from shared.llm import (
     OpenAIStructuredExtractor,
@@ -42,22 +42,13 @@ def _clean_string_list(values: List[str]) -> List[str]:
 class SetFilter(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    allowed: Optional[List[str]] = None
-    excluded: Optional[List[str]] = None
+    allowed: List[str] = Field(default_factory=list)
+    excluded: List[str] = Field(default_factory=list)
 
     @field_validator("allowed", "excluded", mode="after")
     @classmethod
-    def clean_values(cls, values: Optional[List[str]]) -> Optional[List[str]]:
-        if values is None:
-            return None
-        cleaned = _clean_string_list(values)
-        return cleaned or None
-
-    @model_validator(mode="after")
-    def validate_not_empty(self) -> "SetFilter":
-        if not self.allowed and not self.excluded:
-            raise ValueError("set filter must contain at least one of allowed or excluded")
-        return self
+    def clean_values(cls, values: List[str]) -> List[str]:
+        return _clean_string_list(values)
 
 
 class JobEligibilityViewPayload(BaseModel):
@@ -68,8 +59,6 @@ class JobEligibilityViewPayload(BaseModel):
     workplace_types: Optional[SetFilter] = None
     languages: Optional[SetFilter] = None
     seniority_levels: Optional[SetFilter] = None
-    domains: Optional[SetFilter] = None
-    skills: Optional[SetFilter] = None
     job_conditions: Optional[SetFilter] = None
 
     @model_validator(mode="after")
@@ -81,8 +70,6 @@ class JobEligibilityViewPayload(BaseModel):
                 self.workplace_types,
                 self.languages,
                 self.seniority_levels,
-                self.domains,
-                self.skills,
                 self.job_conditions,
             )
         ):

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from types import SimpleNamespace
 
 from eligibility.job_eligibility_view import (
@@ -27,6 +29,18 @@ def _job_eligibility_payload_dict() -> dict[str, object]:
     }
 
 
+def test_job_eligibility_schema_matches_runtime_model() -> None:
+    schema_path = Path("eligibility/job_eligibility_profile_schema.json")
+
+    with schema_path.open("r", encoding="utf-8") as file_handle:
+        schema = json.load(file_handle)
+
+    profile_schema = schema["$defs"]["jobEligibilityProfile"]
+    assert list(profile_schema["properties"].keys()) == list(
+        JobEligibilityViewPayload.model_fields.keys()
+    )
+
+
 def test_render_job_eligibility_view_user_message_includes_job_profile_json() -> None:
     rendered = render_job_eligibility_view_user_message(
         {
@@ -49,6 +63,7 @@ def test_job_eligibility_view_system_message_includes_rendered_schema() -> None:
     assert '"job_conditions": {' in system_message
     assert '"allowed": [' in system_message
     assert "JOB_ELIGIBILITY_PROFILE_SCHEMA:" in system_message
+    assert "Empty arrays are allowed." in system_message
 
 
 def test_job_eligibility_view_payload_normalizes_fields() -> None:
@@ -58,6 +73,20 @@ def test_job_eligibility_view_payload_normalizes_fields() -> None:
     assert payload.locations.allowed == ["eindhoven"]
     assert payload.locations.excluded == ["germany"]
     assert payload.job_conditions.excluded == ["driving license required"]
+
+
+def test_job_eligibility_view_payload_allows_empty_lists() -> None:
+    payload = JobEligibilityViewPayload.model_validate(
+        {
+            "languages": {
+                "allowed": [],
+                "excluded": [],
+            }
+        }
+    )
+
+    assert payload.languages.allowed == []
+    assert payload.languages.excluded == []
 
 
 def test_job_eligibility_view_extractor_uses_rendered_messages() -> None:
