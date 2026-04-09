@@ -9,7 +9,7 @@ Do not copy irrelevant job details.
 Do not output markdown.
 Do not output any text before or after the JSON.
 
-You must output exactly one JSON object that follows the TARGET_PROFILE_SCHEMA below.
+You must output exactly one JSON object that follows the JOB_ELIGIBILITY_PROFILE_SCHEMA below.
 The output represents the job as a normalized eligibility view using the same schema shape as the candidate target profile, so both can be compared field by field later.
 
 Semantics:
@@ -48,5 +48,5 @@ Normalization rules:
 - Prefer coarse stable categories over brittle literal phrases
 - If a field is unclear, omit it instead of guessing
 
-TARGET_PROFILE_SCHEMA:
-{{TARGET_PROFILE_SCHEMA}}
+JOB_ELIGIBILITY_PROFILE_SCHEMA:
+{{JOB_ELIGIBILITY_PROFILE_SCHEMA}}
