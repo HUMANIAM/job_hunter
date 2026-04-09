@@ -14,6 +14,7 @@ def test_sioux_output_paths_use_job_profiles_directory() -> None:
         "https://example.com/controls",
     ).parent == expected_dir / "evaluated"
     assert output_writer.RAW_OUTPUT_DIR == expected_dir / "raw"
+    assert output_writer.RAW_STRUCTURED_OUTPUT_DIR == expected_dir / "raw_structured"
     assert output_writer.EVALUATED_OUTPUT_DIR == expected_dir / "evaluated"
     assert output_writer.MATCH_OUTPUT_DIR == expected_dir / "match"
     assert output_writer.MISMATCH_OUTPUT_DIR == expected_dir / "mismatch"
@@ -35,6 +36,10 @@ def test_output_paths_can_be_computed_for_other_company() -> None:
 
     assert output_writer.output_dir_for("asml") == expected_dir
     assert output_writer.raw_output_dir_for("asml") == expected_dir / "raw"
+    assert (
+        output_writer.raw_structured_output_dir_for("asml")
+        == expected_dir / "raw_structured"
+    )
     assert output_writer.evaluated_output_dir_for("asml") == expected_dir / "evaluated"
     assert output_writer.match_output_dir_for("asml") == expected_dir / "match"
     assert output_writer.mismatch_output_dir_for("asml") == expected_dir / "mismatch"
@@ -114,9 +119,25 @@ def test_write_raw_job_writes_expected_payload(tmp_path: Path, monkeypatch) -> N
     payload = {"title": "Controls Engineer", "url": "https://example.com/controls"}
     output_path = output_writer.write_raw_job(payload)
 
-    assert output_path.parent == tmp_path / "profiles" / "sioux" / "raw"
+    assert output_path.parent == tmp_path / "profiles" / "sioux" / "raw_structured"
     with output_path.open("r", encoding="utf-8") as file_handle:
         assert json.load(file_handle) == payload
+
+
+def test_write_raw_html_writes_expected_payload(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(output_writer, "BASE_OUTPUT_DIR", tmp_path / "profiles")
+
+    output_path = output_writer.write_raw_html(
+        "<html><body>Controls Engineer</body></html>",
+        title="Controls Engineer",
+        url="https://example.com/controls",
+    )
+
+    assert output_path.parent == tmp_path / "profiles" / "sioux" / "raw"
+    assert output_path.suffix == ".html"
+    assert output_path.read_text(encoding="utf-8") == (
+        "<html><body>Controls Engineer</body></html>"
+    )
 
 
 def test_write_job_profile_writes_expected_payload(

@@ -20,6 +20,10 @@ def raw_output_dir_for(company_slug: str) -> Path:
     return output_dir_for(company_slug) / "raw"
 
 
+def raw_structured_output_dir_for(company_slug: str) -> Path:
+    return output_dir_for(company_slug) / "raw_structured"
+
+
 def evaluated_output_dir_for(company_slug: str) -> Path:
     return output_dir_for(company_slug) / "evaluated"
 
@@ -50,6 +54,7 @@ def validation_output_path_for(company_slug: str) -> Path:
 
 OUTPUT_DIR = output_dir_for(DEFAULT_COMPANY_SLUG)
 RAW_OUTPUT_DIR = raw_output_dir_for(DEFAULT_COMPANY_SLUG)
+RAW_STRUCTURED_OUTPUT_DIR = raw_structured_output_dir_for(DEFAULT_COMPANY_SLUG)
 EVALUATED_OUTPUT_DIR = evaluated_output_dir_for(DEFAULT_COMPANY_SLUG)
 MATCH_OUTPUT_DIR = match_output_dir_for(DEFAULT_COMPANY_SLUG)
 MISMATCH_OUTPUT_DIR = mismatch_output_dir_for(DEFAULT_COMPANY_SLUG)
@@ -74,6 +79,10 @@ def job_profile_filename(title: str | None, url: str | None) -> str:
     return f"{stem}__{url_hash}.json"
 
 
+def raw_html_filename(title: str | None, url: str | None) -> str:
+    return job_profile_filename(title, url).replace(".json", ".html")
+
+
 def job_profile_output_path_for(
     company_slug: str,
     title: str | None,
@@ -83,7 +92,15 @@ def job_profile_output_path_for(
 
 
 def raw_job_output_path_for(company_slug: str, title: str | None, url: str | None) -> Path:
-    return raw_output_dir_for(company_slug) / job_profile_filename(title, url)
+    return raw_structured_output_dir_for(company_slug) / job_profile_filename(title, url)
+
+
+def raw_html_output_path_for(
+    company_slug: str,
+    title: str | None,
+    url: str | None,
+) -> Path:
+    return raw_output_dir_for(company_slug) / raw_html_filename(title, url)
 
 
 def evaluated_job_output_path_for(
@@ -185,6 +202,23 @@ def _write_job_payload(
     return output_path
 
 
+def _write_job_text(
+    text: str,
+    *,
+    company_slug: str,
+    title: str | None,
+    url: str | None,
+    path_builder: Callable[[str, str | None, str | None], Path],
+    log_message: Callable[[str], None] | None = None,
+) -> Path:
+    output_path = path_builder(company_slug, title, url)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(text, encoding="utf-8")
+    if log_message is not None:
+        log_message(f"wrote file: {output_path}")
+    return output_path
+
+
 def write_validation_report(
     validation_report: dict[str, Any],
     *,
@@ -208,6 +242,24 @@ def write_raw_job(
         job_payload,
         company_slug=company_slug,
         path_builder=raw_job_output_path_for,
+        log_message=log_message,
+    )
+
+
+def write_raw_html(
+    html_content: str,
+    *,
+    title: str | None,
+    url: str | None,
+    company_slug: str = DEFAULT_COMPANY_SLUG,
+    log_message: Callable[[str], None] | None = None,
+) -> Path:
+    return _write_job_text(
+        html_content,
+        company_slug=company_slug,
+        title=title,
+        url=url,
+        path_builder=raw_html_output_path_for,
         log_message=log_message,
     )
 
