@@ -55,14 +55,12 @@ def test_render_job_eligibility_view_user_message_includes_job_profile_json() ->
     assert '"location": "Eindhoven"' in rendered
 
 
-def test_job_eligibility_view_system_message_includes_rendered_schema() -> None:
+def test_job_eligibility_view_system_message_has_no_schema_injection() -> None:
     system_message = _load_system_message()
 
     assert "{{JOB_ELIGIBILITY_PROFILE_SCHEMA}}" not in system_message
-    assert '"role_families": {' in system_message
-    assert '"job_conditions": {' in system_message
-    assert '"allowed": [' in system_message
-    assert "JOB_ELIGIBILITY_PROFILE_SCHEMA:" in system_message
+    assert "configured response schema" in system_message
+    assert "JOB_ELIGIBILITY_PROFILE_SCHEMA:" not in system_message
     assert "Empty arrays are allowed." in system_message
 
 

@@ -10,8 +10,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from shared.llm import (
     OpenAIStructuredExtractor,
-    build_json_schema_example,
-    load_json_file,
     load_text_file,
     render_json,
     render_template,
@@ -25,7 +23,6 @@ DEFAULT_JOB_ELIGIBILITY_VIEW_MAX_COMPLETION_TOKENS = 2000
 MODULE_DIR = Path(__file__).resolve().parent
 LLM_DIR = MODULE_DIR / "llm"
 
-SCHEMA_PATH = MODULE_DIR / "job_eligibility_profile_schema.json"
 SYSTEM_MESSAGE_PATH = LLM_DIR / "job_eligibility_view_system_message.md"
 USER_TEMPLATE_PATH = LLM_DIR / "job_eligibility_view_user_message_template.md"
 
@@ -79,30 +76,12 @@ class JobEligibilityViewPayload(BaseModel):
 
 @lru_cache(maxsize=1)
 def _load_system_message() -> str:
-    template = load_text_file(SYSTEM_MESSAGE_PATH)
-    rendered_schema = _render_job_eligibility_profile_schema_json()
-    return render_template(
-        template,
-        {
-            "{{JOB_ELIGIBILITY_PROFILE_SCHEMA}}": rendered_schema,
-        },
-    )
+    return load_text_file(SYSTEM_MESSAGE_PATH)
 
 
 @lru_cache(maxsize=1)
 def _load_user_template() -> str:
     return load_text_file(USER_TEMPLATE_PATH)
-
-
-@lru_cache(maxsize=1)
-def _load_job_eligibility_profile_schema() -> Dict[str, Any]:
-    return load_json_file(SCHEMA_PATH)
-
-
-def _render_job_eligibility_profile_schema_json() -> str:
-    root_schema = _load_job_eligibility_profile_schema()
-    profile_schema = root_schema["$defs"]["jobEligibilityProfile"]
-    return render_json(build_json_schema_example(profile_schema, root_schema))
 
 
 def render_job_eligibility_view_user_message(job_profile: Any) -> str:
