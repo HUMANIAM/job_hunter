@@ -234,6 +234,12 @@ class OpenAIStructuredExtractor(Generic[StructuredModelT]):
         temperature: float = 0.0,
         max_completion_tokens: int = 1400,
     ) -> None:
+        """Configure a reusable `chat.completions.parse` extractor.
+
+        `response_format` defines the Pydantic model expected back from the LLM.
+        `render_user_message` turns the caller payload into the user prompt.
+        `operation_name` is used in refusal and failure diagnostics.
+        """
         self._client = client
         self._model = model
         self._response_format = response_format
