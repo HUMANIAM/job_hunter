@@ -14,9 +14,14 @@ if __package__ in {None, ""}:
 from clients.job_profiling.preprocessing.job_profiling_preporcessor import (
     preprocess_job_html,
 )
+from clients.job_profiling.vacancy_profiler.vacancy_profiler import (
+    profile_vacancy_text,
+)
+from infra import json_io
 from infra.logging import log
 
 DEFAULT_PREPROCESSING_OUTPUT_DIR = Path("data/refactor/jobs/sioux/preprocessing")
+DEFAULT_VACANCY_PROFILE_OUTPUT_DIR = Path("data/refactor/jobs/sioux/vacancy_profiles")
 DEFAULT_PIPELINE = ("pre",)
 _KNOWN_PIPELINE_STAGES = {"pre", "ext"}
 
@@ -69,8 +74,27 @@ def _resolve_html_path(html_path: Path) -> Path:
         raise SystemExit(f"html path must point to a .html file: {html_path}")
     return html_path
 
+
 def _preprocessing_output_path_for(html_path: Path) -> Path:
     return DEFAULT_PREPROCESSING_OUTPUT_DIR / f"{html_path.stem}.txt"
+
+
+def _vacancy_profile_output_path_for(html_path: Path) -> Path:
+    return DEFAULT_VACANCY_PROFILE_OUTPUT_DIR / f"{html_path.stem}.json"
+
+
+def _load_cleaned_vacancy_text(html_path: Path) -> str:
+    cleaned_text_path = _preprocessing_output_path_for(html_path)
+    if not cleaned_text_path.exists():
+        raise SystemExit(
+            "preprocessed vacancy text does not exist: "
+            f"{cleaned_text_path}; run with --pipeline pre,ext or pre first"
+        )
+    if not cleaned_text_path.is_file():
+        raise SystemExit(
+            f"preprocessed vacancy text path must be a file: {cleaned_text_path}"
+        )
+    return cleaned_text_path.read_text(encoding="utf-8")
 
 
 def run_job_profiling(
@@ -82,9 +106,7 @@ def run_job_profiling(
     normalized_pipeline = list(pipeline)
     raw_job_html = resolved_html_path.read_text(encoding="utf-8")
     phase_output_paths: dict[str, Path] = {}
-
-    if "ext" in normalized_pipeline:
-        raise SystemExit("pipeline stage(s) not supported yet: ext; supported now: pre")
+    cleaned_text: str | None = None
 
     if "pre" in normalized_pipeline:
         cleaned_text = preprocess_job_html(raw_job_html)
@@ -92,6 +114,18 @@ def run_job_profiling(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(cleaned_text, encoding="utf-8")
         phase_output_paths["pre"] = output_path
+        log(f"wrote file: {output_path}")
+
+    if "ext" in normalized_pipeline:
+        if cleaned_text is None:
+            cleaned_text = _load_cleaned_vacancy_text(resolved_html_path)
+        vacancy_profile = profile_vacancy_text(cleaned_text)
+        output_path = _vacancy_profile_output_path_for(resolved_html_path)
+        json_io.write_json(
+            output_path,
+            vacancy_profile.model_dump(mode="json"),
+        )
+        phase_output_paths["ext"] = output_path
         log(f"wrote file: {output_path}")
 
     return JobProfilingResult(
