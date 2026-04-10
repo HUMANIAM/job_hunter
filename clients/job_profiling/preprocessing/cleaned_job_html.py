@@ -5,23 +5,11 @@ from pydantic import BaseModel, field_validator
 
 
 HTML_TAG_RE = re.compile(r"^[a-z][a-z0-9]*$")
-SOURCE_KINDS = {"visible_html", "json_ld", "meta"}
 
 
 class CleanedJobHtmlLine(BaseModel):
-    source_kind: str
     html_tag: str
     text: str
-
-    @field_validator("source_kind")
-    @classmethod
-    def validate_source_kind(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        if not normalized:
-            raise ValueError("source_kind is empty")
-        if normalized not in SOURCE_KINDS:
-            raise ValueError(f"invalid source kind: {value!r}")
-        return normalized
 
     @field_validator("html_tag")
     @classmethod

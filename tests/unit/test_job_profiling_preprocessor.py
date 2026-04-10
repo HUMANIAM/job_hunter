@@ -18,7 +18,9 @@ def test_job_html_signal_cleaner_system_message_requires_structured_json() -> No
 
     assert "configured response schema" in system_message
     assert "do not output JSON" not in system_message
-    assert "Preserve provenance by assigning the correct `source_kind`" in system_message
+    assert "- `html_tag`: the original HTML tag name from the visible source" in system_message
+    assert "Do not copy JSON-LD, meta tags, title tags, or other document metadata" in system_message
+    assert "source_kind" not in system_message
 
 
 def test_job_html_signal_cleaner_user_message_includes_raw_html() -> None:
@@ -27,7 +29,8 @@ def test_job_html_signal_cleaner_user_message_includes_raw_html() -> None:
     assert "{{RAW_JOB_HTML}}" not in rendered
     assert "<h1>Mechatronics Technician</h1>" in rendered
     assert "Return exactly one JSON object." in rendered
-    assert "`source_kind` must be one of `visible_html`, `json_ld`, or `meta`" in rendered
+    assert "Each line item must include `html_tag` and `text`." in rendered
+    assert "source_kind" not in rendered
 
 
 def test_job_profiling_preprocessor_renders_structured_llm_output_as_text() -> None:
@@ -44,12 +47,10 @@ def test_job_profiling_preprocessor_renders_structured_llm_output_as_text() -> N
                                 {
                                     "lines": [
                                         {
-                                            "source_kind": " visible_html ",
                                             "html_tag": " H1 ",
                                             "text": " Mechatronics Technician ",
                                         },
                                         {
-                                            "source_kind": "json_ld",
                                             "html_tag": "p",
                                             "text": "Build high-tech modules.",
                                         },
@@ -74,8 +75,8 @@ def test_job_profiling_preprocessor_renders_structured_llm_output_as_text() -> N
 
     assert (
         cleaned_text
-        == "visible_html|h1: Mechatronics Technician\n"
-        "json_ld|p: Build high-tech modules."
+        == "h1: Mechatronics Technician\n"
+        "p: Build high-tech modules."
     )
     assert calls == [
         {

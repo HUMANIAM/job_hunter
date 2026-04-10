@@ -52,7 +52,7 @@ def _render_extractor_user_message(payload: Dict[str, str]) -> str:
 
 def _render_cleaned_job_html(cleaned_job_html: CleanedJobHtml) -> str:
     return "\n".join(
-        f"{line.source_kind}|{line.html_tag}: {line.text}"
+        f"{line.html_tag}: {line.text}"
         for line in cleaned_job_html.lines
     )
 
