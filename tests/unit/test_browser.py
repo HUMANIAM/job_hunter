@@ -1,6 +1,48 @@
 from infra import browser as browser_utils
 
 
+class OpenAndPrepareFakeLocator:
+    def __init__(self, calls: list[tuple[str, object]], selector: str) -> None:
+        self.calls = calls
+        self.selector = selector
+
+    @property
+    def first(self) -> "OpenAndPrepareFakeLocator":
+        return self
+
+    def wait_for(self, timeout: int) -> None:
+        self.calls.append(("wait_for", (self.selector, timeout)))
+
+    def count(self) -> int:
+        self.calls.append(("count", self.selector))
+        return 1
+
+    def is_visible(self) -> bool:
+        self.calls.append(("is_visible", self.selector))
+        return True
+
+    def click(self, timeout: int) -> None:
+        self.calls.append(("click", (self.selector, timeout)))
+
+
+class OpenAndPrepareFakePage:
+    def __init__(self, calls: list[tuple[str, object]]) -> None:
+        self.calls = calls
+
+    def goto(self, url: str, *, wait_until: str, timeout: int) -> None:
+        self.calls.append(("goto", (url, wait_until, timeout)))
+
+    def wait_for_load_state(self, state: str) -> None:
+        self.calls.append(("load_state", state))
+
+    def wait_for_timeout(self, timeout: int) -> None:
+        self.calls.append(("timeout", timeout))
+
+    def locator(self, selector: str) -> OpenAndPrepareFakeLocator:
+        self.calls.append(("locator", selector))
+        return OpenAndPrepareFakeLocator(self.calls, selector)
+
+
 def test_wait_for_page_ready_waits_for_dom_and_selector() -> None:
     calls: list[tuple[str, object]] = []
 
@@ -99,6 +141,37 @@ def test_prepare_page_waits_for_each_selector_and_clicks_visible_ones() -> None:
         ("timeout", 333),
         ("locator", "button.missing"),
         ("count", "button.missing"),
+    ]
+
+
+def test_open_and_prepare_page_opens_then_prepares_page() -> None:
+    calls: list[tuple[str, object]] = []
+
+    clicked_selectors = browser_utils.open_and_prepare_page(
+        OpenAndPrepareFakePage(calls),
+        "https://example.com/jobs",
+        wait_for=["a.ready"],
+        click_if_visible_selectors=["input.cookie-close"],
+        open_wait_until="domcontentloaded",
+        open_timeout_ms=123,
+        wait_timeout_ms=456,
+        wait_settle_ms=789,
+        click_timeout_ms=111,
+        click_settle_ms=222,
+    )
+
+    assert clicked_selectors == ["input.cookie-close"]
+    assert calls == [
+        ("goto", ("https://example.com/jobs", "domcontentloaded", 123)),
+        ("load_state", "domcontentloaded"),
+        ("timeout", 789),
+        ("locator", "a.ready"),
+        ("wait_for", ("a.ready", 456)),
+        ("locator", "input.cookie-close"),
+        ("count", "input.cookie-close"),
+        ("is_visible", "input.cookie-close"),
+        ("click", ("input.cookie-close", 111)),
+        ("timeout", 222),
     ]
 
 

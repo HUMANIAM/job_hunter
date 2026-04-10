@@ -50,6 +50,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         with launched_chromium(playwright, headless=True) as browser:
             links = adapter.collect_job_links(browser, job_limit=args.job_limit)
 
+    print("================ retrieved links ===================")
     for link in links:
         print(link)
 

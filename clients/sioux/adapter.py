@@ -6,7 +6,7 @@ from typing import Any, List
 from urllib.parse import urljoin
 
 from clients.base import BaseClientAdapter
-from infra.browser import open_page, prepare_page
+from infra.browser import open_and_prepare_page
 from infra.logging import log
 from shared.normalizer import normalize_text
 
@@ -31,10 +31,9 @@ class SiouxClientAdapter(BaseClientAdapter):
 
 
     def _open_page(self, page: Any, url: str) -> None:
-        open_page(page, url)
-
-        clicked_selectors = prepare_page(
+        clicked_selectors = open_and_prepare_page(
             page,
+            url,
             wait_for=[SIOUX_RESULTS_READY_SELECTOR],
             click_if_visible_selectors=[SIOUX_COOKIE_ACCEPT_SELECTOR],
         )
