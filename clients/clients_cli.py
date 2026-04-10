@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 from typing import Sequence
 
 if __package__ in {None, ""}:
     raise SystemExit("Run this CLI as a module: python -m clients.clients_cli ...")
 
+from clients.job_downloader import download_job_html_pages
 from playwright.sync_api import sync_playwright
 
 from clients.clients import Client, parse_client
@@ -34,6 +36,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=_positive_int,
         help="Maximum number of job links to collect.",
     )
+    parser.add_argument(
+        "--download",
+        action="store_true",
+        help="Download HTML pages to data/refactor/jobs/{company}/html.",
+    )
     return parser.parse_args(list(argv) if argv is not None else None)
 
 
@@ -49,6 +56,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     with sync_playwright() as playwright:
         with launched_chromium(playwright, headless=True) as browser:
             links = adapter.collect_job_links(browser, job_limit=args.job_limit)
+            if args.download:
+                download_job_html_pages(
+                    browser,
+                    links,
+                    Path("data/refactor/jobs") / client.value / "html",
+                )
 
     print("================ retrieved links ===================")
     for link in links:

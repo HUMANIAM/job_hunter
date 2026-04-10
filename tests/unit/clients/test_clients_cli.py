@@ -50,6 +50,14 @@ def test_parse_args_accepts_company_and_job_limit() -> None:
 
     assert args.company == "sioux"
     assert args.job_limit == 3
+    assert args.download is False
+
+
+def test_parse_args_accepts_download_flag() -> None:
+    args = clients_cli.parse_args(["sioux", "--download"])
+
+    assert args.company == "sioux"
+    assert args.download is True
 
 
 def test_main_collects_links_and_prints_each_one(
@@ -66,10 +74,58 @@ def test_main_collects_links_and_prints_each_one(
         lambda playwright, *, headless=True: _yield(fake_browser),
     )
     monkeypatch.setattr(clients_cli, "get_client_adapter", lambda client: fake_adapter)
+    monkeypatch.setattr(
+        clients_cli,
+        "download_job_html_pages",
+        lambda browser, links, destination_dir: None,
+    )
 
     clients_cli.main(["sioux", "--job-limit", "2"])
 
     assert fake_adapter.calls == [(fake_browser, 2)]
+    assert capsys.readouterr().out.splitlines() == [
+        "================ retrieved links ===================",
+        "https://vacancy.sioux.eu/vacancies/one.html",
+        "https://vacancy.sioux.eu/vacancies/two.html",
+    ]
+
+
+def test_main_downloads_html_when_flag_enabled(
+    monkeypatch,
+    capsys,
+) -> None:
+    fake_adapter = FakeAdapter()
+    fake_browser = object()
+    download_calls: list[tuple[object, list[str], str]] = []
+
+    monkeypatch.setattr(clients_cli, "sync_playwright", lambda: _yield(object()))
+    monkeypatch.setattr(
+        clients_cli,
+        "launched_chromium",
+        lambda playwright, *, headless=True: _yield(fake_browser),
+    )
+    monkeypatch.setattr(clients_cli, "get_client_adapter", lambda client: fake_adapter)
+    monkeypatch.setattr(
+        clients_cli,
+        "download_job_html_pages",
+        lambda browser, links, destination_dir: download_calls.append(
+            (browser, list(links), str(destination_dir))
+        ),
+    )
+
+    clients_cli.main(["sioux", "--job-limit", "2", "--download"])
+
+    assert fake_adapter.calls == [(fake_browser, 2)]
+    assert download_calls == [
+        (
+            fake_browser,
+            [
+                "https://vacancy.sioux.eu/vacancies/one.html",
+                "https://vacancy.sioux.eu/vacancies/two.html",
+            ],
+            "data/refactor/jobs/sioux/html",
+        )
+    ]
     assert capsys.readouterr().out.splitlines() == [
         "================ retrieved links ===================",
         "https://vacancy.sioux.eu/vacancies/one.html",
