@@ -1,7 +1,10 @@
+import sys
+
 import pytest
 from pydantic import ValidationError
 
 from clients.profiling.vacancy_profile_model import (
+    Education,
     RoleTitles,
     VacancyProfile,
 )
@@ -69,6 +72,51 @@ def test_role_titles_requires_confidence_between_zero_and_one() -> None:
         )
 
 
+def test_education_normalizes_and_keeps_support_metadata() -> None:
+    education = Education(
+        min_level=" Bachelor ",
+        accepted_fields=[
+            " Computer Engineering ",
+            "embedded systems",
+            "computer engineering",
+        ],
+        confidence="0.83",
+        evidence=[
+            " Bachelor degree in Computer Engineering ",
+            "Bachelor degree in Computer Engineering",
+        ],
+    )
+
+    assert education.min_level == "bachelor"
+    assert education.accepted_fields == [
+        "computer engineering",
+        "embedded systems",
+    ]
+    assert education.confidence == 0.83
+    assert education.evidence == ["Bachelor degree in Computer Engineering"]
+
+
+def test_education_defaults_empty_support_when_unset() -> None:
+    education = Education()
+
+    assert education.min_level is None
+    assert education.accepted_fields == []
+    assert education.confidence == 0.0
+    assert education.evidence == []
+
+
+def test_education_requires_evidence_when_requirements_are_set() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="evidence must not be empty when education requirements are set",
+    ):
+        Education(
+            min_level="bachelor",
+            confidence=0.84,
+            evidence=[],
+        )
+
+
 def test_vacancy_profile_requires_role_titles_supporting_fields() -> None:
     with pytest.raises(ValidationError, match="Field required"):
         VacancyProfile.model_validate(
@@ -79,3 +127,8 @@ def test_vacancy_profile_requires_role_titles_supporting_fields() -> None:
                 }
             }
         )
+
+
+def test_vacancy_profile_exports_only_public_profile_symbol() -> None:
+    vacancy_profile_module = sys.modules[VacancyProfile.__module__]
+    assert vacancy_profile_module.__all__ == ["VacancyProfile"]

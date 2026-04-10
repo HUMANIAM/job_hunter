@@ -19,17 +19,17 @@ from clients.profiling import (
 )
 from infra import json_io
 from infra.logging import log
+from shared.cli import positive_int_arg
 
 DEFAULT_HTML_INPUT_DIR = Path("data/refactor/jobs/sioux/html")
 DEFAULT_PREPROCESSING_OUTPUT_DIR = Path("data/refactor/jobs/sioux/preprocessing")
 DEFAULT_VACANCY_PROFILE_OUTPUT_DIR = Path("data/refactor/jobs/sioux/vacancy_profiles")
-DEFAULT_PIPELINE = ("pre",)
 _KNOWN_PIPELINE_STAGES = {"pre", "ext"}
 
 
 @dataclass
 class JobProfilingResult:
-    html_path: Path
+    input_path: Path
     phase_output_paths: dict[str, Path]
 
 
@@ -51,17 +51,16 @@ def _parse_pipeline(value: str) -> list[str]:
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run the job profiling pipeline for one HTML file or a directory "
-        "of HTML files."
+        description="Run the job profiling pipeline for raw HTML or preprocessed "
+        "vacancy text."
     )
     parser.add_argument(
-        "html_path",
+        "input_path",
         type=Path,
         nargs="?",
-        default=DEFAULT_HTML_INPUT_DIR,
         help=(
-            "Raw job HTML file path or directory. "
-            "Defaults to data/refactor/jobs/sioux/html."
+            "Input file or directory matching the selected pipeline: .html for "
+            "`pre` or `pre,ext`; .txt for `ext`."
         ),
     )
     parser.add_argument(
@@ -74,12 +73,32 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--ext-output-dir",
+        type=Path,
+        default=DEFAULT_VACANCY_PROFILE_OUTPUT_DIR,
+        help=(
+            "Directory for vacancy profile JSON output. "
+            "Defaults to data/refactor/jobs/sioux/vacancy_profiles."
+        ),
+    )
+    parser.add_argument(
         "--pipeline",
-        default="pre",
-        help="Comma-separated pipeline stages. Available: pre, ext. Defaults to pre.",
+        required=True,
+        help="Comma-separated pipeline stages. Available: pre, ext.",
+    )
+    parser.add_argument(
+        "-n",
+        type=positive_int_arg("-n"),
+        help="Maximum number of jobs to process from a directory input.",
     )
     args = parser.parse_args(list(argv) if argv is not None else None)
     args.pipeline = _parse_pipeline(args.pipeline)
+    if args.input_path is None:
+        args.input_path = (
+            DEFAULT_HTML_INPUT_DIR
+            if "pre" in args.pipeline
+            else args.pre_output_dir
+        )
     return args
 
 
@@ -93,24 +112,77 @@ def _resolve_html_path(html_path: Path) -> Path:
     return html_path
 
 
-def _resolve_html_inputs(html_path: Path) -> list[Path]:
-    if not html_path.exists():
-        raise SystemExit(f"html path does not exist: {html_path}")
+def _resolve_cleaned_text_path(cleaned_text_path: Path) -> Path:
+    if not cleaned_text_path.exists():
+        raise SystemExit(f"preprocessed text path does not exist: {cleaned_text_path}")
+    if not cleaned_text_path.is_file():
+        raise SystemExit(f"preprocessed text path must be a file: {cleaned_text_path}")
+    if cleaned_text_path.suffix.lower() != ".txt":
+        raise SystemExit(f"preprocessed text path must point to a .txt file: {cleaned_text_path}")
+    return cleaned_text_path
 
-    if html_path.is_file():
-        return [_resolve_html_path(html_path)]
 
-    if not html_path.is_dir():
-        raise SystemExit(f"html path must be a file or directory: {html_path}")
-
-    html_paths = sorted(
+def _resolve_directory_inputs(
+    directory_path: Path,
+    *,
+    extensions: tuple[str, ...],
+    limit: int | None = None,
+    empty_error_message: str,
+) -> list[Path]:
+    candidate_paths = sorted(
         path
-        for path in html_path.iterdir()
-        if path.is_file() and path.suffix.lower() == ".html"
+        for path in directory_path.iterdir()
+        if path.is_file() and path.suffix.lower() in extensions
     )
-    if not html_paths:
-        raise SystemExit(f"html directory contains no .html files: {html_path}")
-    return html_paths
+    if not candidate_paths:
+        raise SystemExit(empty_error_message)
+    if limit is not None:
+        return candidate_paths[:limit]
+    return candidate_paths
+
+
+def _resolve_input_paths(
+    input_path: Path,
+    *,
+    pipeline: Sequence[str],
+    input_limit: int | None = None,
+) -> list[Path]:
+    if not input_path.exists():
+        raise SystemExit(f"input path does not exist: {input_path}")
+
+    if input_path.is_file():
+        if "pre" in pipeline:
+            return [_resolve_html_path(input_path)]
+
+        if input_path.suffix.lower() == ".txt":
+            return [_resolve_cleaned_text_path(input_path)]
+        raise SystemExit(
+            "ext input path must point to a .txt file: "
+            f"{input_path}"
+        )
+
+    if not input_path.is_dir():
+        raise SystemExit(f"input path must be a file or directory: {input_path}")
+
+    if "pre" in pipeline:
+        return _resolve_directory_inputs(
+            input_path,
+            extensions=(".html",),
+            limit=input_limit,
+            empty_error_message=(
+                f"html directory contains no .html files: {input_path}"
+            ),
+        )
+
+    return _resolve_directory_inputs(
+        input_path,
+        extensions=(".txt",),
+        limit=input_limit,
+        empty_error_message=(
+            "ext input directory contains no .txt files: "
+            f"{input_path}"
+        ),
+    )
 
 
 def _preprocessing_output_path_for(
@@ -145,6 +217,11 @@ def _load_cleaned_vacancy_text(
             f"preprocessed vacancy text path must be a file: {cleaned_text_path}"
         )
     return cleaned_text_path.read_text(encoding="utf-8")
+
+
+def _load_cleaned_vacancy_text_from_file(cleaned_text_path: Path) -> str:
+    resolved_cleaned_text_path = _resolve_cleaned_text_path(cleaned_text_path)
+    return resolved_cleaned_text_path.read_text(encoding="utf-8")
 
 
 def run_job_profiling(
@@ -190,42 +267,84 @@ def run_job_profiling(
         log(f"wrote file: {output_path}")
 
     return JobProfilingResult(
-        html_path=resolved_html_path,
+        input_path=resolved_html_path,
         phase_output_paths=phase_output_paths,
+    )
+
+
+def run_vacancy_profile_extraction(
+    *,
+    cleaned_text_path: Path,
+    vacancy_profile_output_dir: Path = DEFAULT_VACANCY_PROFILE_OUTPUT_DIR,
+) -> JobProfilingResult:
+    resolved_cleaned_text_path = _resolve_cleaned_text_path(cleaned_text_path)
+    cleaned_text = _load_cleaned_vacancy_text_from_file(resolved_cleaned_text_path)
+    vacancy_profile = profile_vacancy_text(cleaned_text)
+    output_path = _vacancy_profile_output_path_for(
+        resolved_cleaned_text_path,
+        vacancy_profile_output_dir,
+    )
+    json_io.write_json(
+        output_path,
+        vacancy_profile.model_dump(mode="json"),
+    )
+    log(f"wrote file: {output_path}")
+    return JobProfilingResult(
+        input_path=resolved_cleaned_text_path,
+        phase_output_paths={"ext": output_path},
     )
 
 
 def run_job_profiling_for_input_path(
     *,
-    html_path: Path,
+    input_path: Path,
     pipeline: Sequence[str],
+    input_limit: int | None = None,
     preprocessing_output_dir: Path = DEFAULT_PREPROCESSING_OUTPUT_DIR,
     vacancy_profile_output_dir: Path = DEFAULT_VACANCY_PROFILE_OUTPUT_DIR,
 ) -> list[JobProfilingResult]:
-    return [
-        run_job_profiling(
-            html_path=resolved_html_path,
-            pipeline=pipeline,
-            preprocessing_output_dir=preprocessing_output_dir,
-            vacancy_profile_output_dir=vacancy_profile_output_dir,
+    resolved_input_paths = _resolve_input_paths(
+        input_path,
+        pipeline=pipeline,
+        input_limit=input_limit,
+    )
+    results: list[JobProfilingResult] = []
+    for resolved_input_path in resolved_input_paths:
+        if resolved_input_path.suffix.lower() == ".txt":
+            results.append(
+                run_vacancy_profile_extraction(
+                    cleaned_text_path=resolved_input_path,
+                    vacancy_profile_output_dir=vacancy_profile_output_dir,
+                )
+            )
+            continue
+
+        results.append(
+            run_job_profiling(
+                html_path=resolved_input_path,
+                pipeline=pipeline,
+                preprocessing_output_dir=preprocessing_output_dir,
+                vacancy_profile_output_dir=vacancy_profile_output_dir,
+            )
         )
-        for resolved_html_path in _resolve_html_inputs(html_path)
-    ]
+    return results
 
 
 def main(argv: Sequence[str] | None = None) -> None:
     args = parse_args(argv)
     log(
-        f"job profiling started: html={args.html_path} | "
+        f"job profiling started: input={args.input_path} | "
         f"pipeline={','.join(args.pipeline)}"
     )
     results = run_job_profiling_for_input_path(
-        html_path=args.html_path,
+        input_path=args.input_path,
         pipeline=args.pipeline,
+        input_limit=args.n,
         preprocessing_output_dir=args.pre_output_dir,
+        vacancy_profile_output_dir=args.ext_output_dir,
     )
     log(
-        f"job profiling done: html={args.html_path} | "
+        f"job profiling done: input={args.input_path} | "
         f"files={len(results)}"
     )
 
