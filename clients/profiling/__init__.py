@@ -6,7 +6,7 @@ from typing import Dict
 
 from openai import OpenAI
 
-from clients.job_profiling.vacancy_profiler.vacancy_profile_model import VacancyProfile
+from clients.profiling.vacancy_profile_model import VacancyProfile
 from shared.env import require_env_value
 from shared.llm import OpenAIStructuredExtractor, load_text_file, render_template
 

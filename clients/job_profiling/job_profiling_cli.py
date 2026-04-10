@@ -14,7 +14,7 @@ if __package__ in {None, ""}:
 from clients.job_profiling.preprocessing.job_profiling_preporcessor import (
     preprocess_job_html,
 )
-from clients.job_profiling.vacancy_profiler.vacancy_profiler import (
+from clients.profiling import (
     profile_vacancy_text,
 )
 from infra import json_io

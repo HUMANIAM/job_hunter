@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from clients.job_profiling import job_profiling_cli
-from clients.job_profiling.vacancy_profiler.vacancy_profile_model import VacancyProfile
+from clients.profiling.vacancy_profile_model import VacancyProfile
 
 
 def _vacancy_profile_payload() -> VacancyProfile:
