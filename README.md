@@ -42,25 +42,25 @@ Run a syntax check:
 Run the single project entrypoint:
 
 ```bash
-.venv/bin/python app/job_hunter.py
+.venv/bin/python -m app.job_hunter
 ```
 
 Rerank existing job profile JSON files without refetching:
 
 ```bash
-.venv/bin/python app/rerank_jobs.py
+.venv/bin/python -m app.rerank_jobs
 ```
 
 Fetch a specific source:
 
 ```bash
-.venv/bin/python app/job_hunter.py --company sioux
+.venv/bin/python -m app.job_hunter --company sioux
 ```
 
 Use a specific candidate profile:
 
 ```bash
-.venv/bin/python app/job_hunter.py \
+.venv/bin/python -m app.job_hunter \
   --company sioux \
   --cv data/candidate_profiles/Ibrahim_Saad_CV.json
 ```
@@ -68,7 +68,7 @@ Use a specific candidate profile:
 Build or refresh the candidate profile from a CV source file:
 
 ```bash
-.venv/bin/python app/job_hunter.py \
+.venv/bin/python -m app.job_hunter \
   --company sioux \
   --cv data/candidate_profiles/Ibrahim_Saad_CV.md
 ```
@@ -76,7 +76,7 @@ Build or refresh the candidate profile from a CV source file:
 Write all optional debug artifacts as well:
 
 ```bash
-.venv/bin/python app/job_hunter.py \
+.venv/bin/python -m app.job_hunter \
   --company sioux \
   --write-raw \
   --write-evaluated \
@@ -97,7 +97,7 @@ Write all optional debug artifacts as well:
 Rerank a single evaluated job JSON against a single candidate profile JSON:
 
 ```bash
-.venv/bin/python app/rerank_jobs.py \
+.venv/bin/python -m app.rerank_jobs \
   --job-profile data/job_profiles/sioux/evaluated/example.json \
   --candidate-profile data/candidate_profiles/Ibrahim_Saad_CV.json
 ```

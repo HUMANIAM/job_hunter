@@ -13,26 +13,12 @@ What it does:
 from __future__ import annotations
 
 import argparse
-import os
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-
-def bootstrap_project_root() -> None:
-    root_str = str(PROJECT_ROOT)
-    if root_str not in sys.path:
-        sys.path.insert(0, root_str)
-
-    if Path.cwd() != PROJECT_ROOT:
-        os.chdir(PROJECT_ROOT)
-
-
-bootstrap_project_root()
+if __package__ in {None, ""}:
+    raise SystemExit("Run this CLI as a module: python -m app.rerank_jobs ...")
 
 from app import job_hunter_core
 from infra.logging import log

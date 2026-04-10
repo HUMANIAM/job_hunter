@@ -38,6 +38,70 @@ def test_wait_for_page_ready_waits_for_dom_and_selector() -> None:
     ]
 
 
+def test_prepare_page_waits_for_each_selector_and_clicks_visible_ones() -> None:
+    calls: list[tuple[str, object]] = []
+
+    class FakeLocator:
+        def __init__(self, selector: str) -> None:
+            self.selector = selector
+
+        @property
+        def first(self) -> "FakeLocator":
+            return self
+
+        def wait_for(self, timeout: int) -> None:
+            calls.append(("wait_for", (self.selector, timeout)))
+
+        def count(self) -> int:
+            calls.append(("count", self.selector))
+            return 1 if self.selector == "input.cookie-close" else 0
+
+        def is_visible(self) -> bool:
+            calls.append(("is_visible", self.selector))
+            return self.selector == "input.cookie-close"
+
+        def click(self, timeout: int) -> None:
+            calls.append(("click", (self.selector, timeout)))
+
+    class FakePage:
+        def wait_for_load_state(self, state: str) -> None:
+            calls.append(("load_state", state))
+
+        def wait_for_timeout(self, timeout: int) -> None:
+            calls.append(("timeout", timeout))
+
+        def locator(self, selector: str) -> FakeLocator:
+            calls.append(("locator", selector))
+            return FakeLocator(selector)
+
+    clicked_selectors = browser_utils.prepare_page(
+        FakePage(),
+        wait_for=["a.ready", "div.results"],
+        click_if_visible_selectors=["input.cookie-close", "button.missing"],
+        wait_timeout_ms=1234,
+        wait_settle_ms=567,
+        click_timeout_ms=222,
+        click_settle_ms=333,
+    )
+
+    assert clicked_selectors == ["input.cookie-close"]
+    assert calls == [
+        ("load_state", "domcontentloaded"),
+        ("timeout", 567),
+        ("locator", "a.ready"),
+        ("wait_for", ("a.ready", 1234)),
+        ("locator", "div.results"),
+        ("wait_for", ("div.results", 1234)),
+        ("locator", "input.cookie-close"),
+        ("count", "input.cookie-close"),
+        ("is_visible", "input.cookie-close"),
+        ("click", ("input.cookie-close", 222)),
+        ("timeout", 333),
+        ("locator", "button.missing"),
+        ("count", "button.missing"),
+    ]
+
+
 def test_click_if_visible_clicks_and_waits_when_element_is_visible() -> None:
     calls: list[tuple[str, object]] = []
 

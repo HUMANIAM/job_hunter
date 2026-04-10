@@ -21,28 +21,13 @@ What it does:
 from __future__ import annotations
 
 import argparse
-import os
-import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-
-def bootstrap_project_root() -> None:
-    root_str = str(PROJECT_ROOT)
-    if root_str not in sys.path:
-        sys.path.insert(0, root_str)
-
-    # Keep relative output paths anchored to the repository root.
-    if Path.cwd() != PROJECT_ROOT:
-        os.chdir(PROJECT_ROOT)
-
-
-bootstrap_project_root()
+if __package__ in {None, ""}:
+    raise SystemExit("Run this CLI as a module: python -m app.job_hunter ...")
 
 from playwright.sync_api import sync_playwright
 
