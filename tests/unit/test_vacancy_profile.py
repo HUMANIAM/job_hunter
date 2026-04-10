@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from clients.job_profiling.vacancy_profiler.vacancy_profile_model import (
+from clients.profiling.vacancy_profile_model import (
     RoleTitles,
     VacancyProfile,
 )

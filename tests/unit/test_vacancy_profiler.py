@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from clients.job_profiling.vacancy_profiler import vacancy_profiler as profiler_module
-from clients.job_profiling.vacancy_profiler.vacancy_profile_model import VacancyProfile
+import clients.profiling as profiler_module
+from clients.profiling.vacancy_profile_model import VacancyProfile
 
 
 def test_vacancy_profile_system_message_composes_common_rules() -> None:
