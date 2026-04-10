@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import math
-import os
 import sys
 import traceback
 from functools import lru_cache
@@ -154,15 +153,6 @@ def render_template(template: str, replacements: dict[str, str]) -> str:
     for placeholder, value in replacements.items():
         rendered = rendered.replace(placeholder, value)
     return rendered
-
-
-def require_env_value(name: str, *, error_context: str) -> str:
-    value = os.environ.get(name)
-    if value:
-        return value
-
-    raise RuntimeError(f"{name} is required for {error_context}")
-
 
 def _decode_json_pointer_token(token: str) -> str:
     return token.replace("~1", "/").replace("~0", "~")

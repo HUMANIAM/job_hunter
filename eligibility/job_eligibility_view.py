@@ -8,12 +8,12 @@ from typing import Any, Dict, List, Optional
 from openai import OpenAI
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from shared.env import require_env_value
 from shared.llm import (
     OpenAIStructuredExtractor,
     load_text_file,
     render_json,
     render_template,
-    require_env_value,
 )
 from shared.normalizer import normalize_and_dedupe_texts, normalize_taxonomy_name
 

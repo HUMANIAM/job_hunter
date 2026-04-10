@@ -8,6 +8,7 @@ from typing import Any, Iterable, List, Literal, Optional
 from openai import OpenAI
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
+from shared.env import require_env_value
 from shared.llm import (
     OpenAIStructuredExtractor,
     build_json_schema_example,
@@ -15,7 +16,6 @@ from shared.llm import (
     load_text_file,
     render_json,
     render_template,
-    require_env_value,
     resolve_json_schema_node,
 )
 from shared.normalizer import (
