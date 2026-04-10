@@ -104,6 +104,23 @@ def open_and_prepare_page(
     )
 
 
+def capture_page_html(page: Page) -> str | None:
+    """Return the current page HTML, or `None` when Playwright cannot provide it."""
+    try:
+        return page.content()
+    except Exception:
+        return None
+
+
+def capture_page_title(page: Page) -> str | None:
+    """Return the current page title, or `None` when Playwright cannot provide it."""
+    try:
+        title = page.title().strip()
+        return title or None
+    except Exception:
+        return None
+
+
 def click_if_visible(
     page: Page,
     selector: str,

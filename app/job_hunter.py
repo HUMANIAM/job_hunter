@@ -37,7 +37,7 @@ from candidate_profile.profile import (
     compute_source_text_hash,
     extract_profile,
 )
-from infra.browser import launched_chromium
+from infra.browser import capture_page_html, launched_chromium
 from infra.format_conversion import convert_to_text
 from infra.logging import log
 from ranking.service import rank_job
@@ -134,14 +134,6 @@ def load_candidate_profile(
         log_message=log_message,
     )
 
-
-def _capture_page_html(page: Any) -> str | None:
-    try:
-        return page.content()
-    except Exception:
-        return None
-
-
 def fetch_source_jobs(
     browser: Any,
     source: SourceDefinition,
@@ -195,7 +187,7 @@ def fetch_source_jobs(
                 jobs.append(job)
 
                 if write_raw_jobs:
-                    raw_html_content = _capture_page_html(detail_page)
+                    raw_html_content = capture_page_html(detail_page)
                     report_writer.write_raw_job(
                         raw_job_payload,
                         company_slug=source.company_slug,
