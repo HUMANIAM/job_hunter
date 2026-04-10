@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Dict
 
 from openai import OpenAI
 
+from clients.job_profiling.preprocessing.cleaned_job_html import CleanedJobHtml
 from shared.env import require_env_value
-from shared.llm import load_text_file, render_template
+from shared.llm import OpenAIStructuredExtractor, load_text_file, render_template
 
 _JOB_HTML_SIGNAL_CLEANER_LLM_MODEL = "gpt-5.4-mini"
 DEFAULT_JOB_HTML_SIGNAL_CLEANER_MAX_COMPLETION_TOKENS = 4000
@@ -38,14 +40,42 @@ def _render_user_message(raw_job_html: str) -> str:
     )
 
 
+def _build_extraction_payload(raw_job_html: str) -> Dict[str, str]:
+    return {
+        "raw_job_html": raw_job_html,
+    }
+
+
+def _render_extractor_user_message(payload: Dict[str, str]) -> str:
+    return _render_user_message(payload["raw_job_html"])
+
+
+def _render_cleaned_job_html(cleaned_job_html: CleanedJobHtml) -> str:
+    return "\n".join(
+        f"{line.source_kind}|{line.html_tag}: {line.text}"
+        for line in cleaned_job_html.lines
+    )
+
+
 class JobProfilingPreprocessor:
     def __init__(
         self,
         *,
         client: OpenAI,
+        model: str = _JOB_HTML_SIGNAL_CLEANER_LLM_MODEL,
+        max_completion_tokens: int = DEFAULT_JOB_HTML_SIGNAL_CLEANER_MAX_COMPLETION_TOKENS,
+        timeout_seconds: float = _JOB_HTML_SIGNAL_CLEANER_TIMEOUT_SECONDS,
     ) -> None:
-        self._client = client
-        self._system_message = _load_system_message()
+        self._extractor = OpenAIStructuredExtractor(
+            client=client,
+            model=model,
+            response_format=CleanedJobHtml,
+            system_message=_load_system_message(),
+            render_user_message=_render_extractor_user_message,
+            operation_name="Job HTML signal cleaning",
+            timeout_seconds=timeout_seconds,
+            max_completion_tokens=max_completion_tokens,
+        )
 
     @classmethod
     def create(cls) -> JobProfilingPreprocessor:
@@ -58,49 +88,25 @@ class JobProfilingPreprocessor:
         )
 
     def preprocess(self, raw_job_html: str) -> str:
-        user_message = _render_user_message(raw_job_html)
-        completion = self._client.chat.completions.create(
-            model=_JOB_HTML_SIGNAL_CLEANER_LLM_MODEL,
-            n=1,
-            temperature=0.0,
-            presence_penalty=0,
-            frequency_penalty=0,
-            max_completion_tokens=DEFAULT_JOB_HTML_SIGNAL_CLEANER_MAX_COMPLETION_TOKENS,
-            store=False,
-            messages=[
-                {"role": "system", "content": self._system_message},
-                {"role": "user", "content": user_message},
-            ],
-            timeout=_JOB_HTML_SIGNAL_CLEANER_TIMEOUT_SECONDS,
+        cleaned_job_html = self._extractor.extract(
+            _build_extraction_payload(raw_job_html)
         )
-        message = completion.choices[0].message
-        refusal = getattr(message, "refusal", None)
-        if refusal:
-            raise RuntimeError(f"Job HTML signal cleaning refused the request: {refusal}")
-
-        if not message.content:
-            raise RuntimeError("Job HTML signal cleaning returned empty content")
-
-        return message.content
+        return _render_cleaned_job_html(cleaned_job_html)
 
 
 @lru_cache(maxsize=1)
-def get_default_job_profiling_preprocessor() -> JobProfilingPreprocessor:
+def get_job_profiling_preprocessor() -> JobProfilingPreprocessor:
     return JobProfilingPreprocessor.create()
 
 
-def preprocess_job_html(
-    raw_job_html: str,
-    *,
-    preprocessor: JobProfilingPreprocessor | None = None,
-) -> str:
-    active_preprocessor = preprocessor or get_default_job_profiling_preprocessor()
-    return active_preprocessor.preprocess(raw_job_html)
+def preprocess_job_html(raw_job_html: str) -> str:
+    preprocessor = get_job_profiling_preprocessor()
+    return preprocessor.preprocess(raw_job_html)
 
 
 __all__ = [
     "DEFAULT_JOB_HTML_SIGNAL_CLEANER_MAX_COMPLETION_TOKENS",
     "JobProfilingPreprocessor",
-    "get_default_job_profiling_preprocessor",
+    "get_job_profiling_preprocessor",
     "preprocess_job_html",
 ]
