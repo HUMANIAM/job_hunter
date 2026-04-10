@@ -60,6 +60,50 @@ def open_page(
     page.goto(url, wait_until=wait_until, timeout=timeout_ms)
 
 
+def open_and_prepare_page(
+    page: Page,
+    url: str,
+    *,
+    wait_for: Sequence[str] = (),
+    click_if_visible_selectors: Sequence[str] = (),
+    open_wait_until: str = "domcontentloaded",
+    open_timeout_ms: int = 30000,
+    wait_timeout_ms: int = 5000,
+    wait_settle_ms: int = 1200,
+    click_timeout_ms: int = 2000,
+    click_settle_ms: int = 500,
+) -> list[str]:
+    """Open `url`, then wait and optionally click selectors on the loaded page.
+
+    Args:
+        page: Playwright page to navigate and prepare.
+        url: Absolute or relative URL to open.
+        wait_for: Selectors that should be waited for before interaction.
+        click_if_visible_selectors: Selectors to click when visible.
+        open_wait_until: Playwright load state to wait for during navigation.
+        open_timeout_ms: Maximum time allowed for the navigation.
+        wait_timeout_ms: Maximum time to wait for each selector in `wait_for`.
+        wait_settle_ms: Extra delay after DOM load to let UI updates settle.
+        click_timeout_ms: Maximum time allowed for each click action.
+        click_settle_ms: Extra delay after each click to let UI updates settle.
+    """
+    open_page(
+        page,
+        url,
+        wait_until=open_wait_until,
+        timeout_ms=open_timeout_ms,
+    )
+    return prepare_page(
+        page,
+        wait_for=wait_for,
+        click_if_visible_selectors=click_if_visible_selectors,
+        wait_timeout_ms=wait_timeout_ms,
+        wait_settle_ms=wait_settle_ms,
+        click_timeout_ms=click_timeout_ms,
+        click_settle_ms=click_settle_ms,
+    )
+
+
 def click_if_visible(
     page: Page,
     selector: str,

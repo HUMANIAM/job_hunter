@@ -71,6 +71,7 @@ def test_main_collects_links_and_prints_each_one(
 
     assert fake_adapter.calls == [(fake_browser, 2)]
     assert capsys.readouterr().out.splitlines() == [
+        "================ retrieved links ===================",
         "https://vacancy.sioux.eu/vacancies/one.html",
         "https://vacancy.sioux.eu/vacancies/two.html",
     ]
