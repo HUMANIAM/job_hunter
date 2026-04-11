@@ -92,13 +92,16 @@ Extract the core technical requirements that are clearly supported by the source
 
 ### domain_or_industry_requirements
 
-Extract domain or industry requirements only when the vacancy clearly presents them as candidate-facing requirements.
+Extract domain or industry requirements only when the vacancy clearly states them as candidate-facing requirements.
 
 - `required` contains domains or industries the vacancy explicitly requires as candidate experience, background, or familiarity.
-- Extract a domain only when the posting clearly asks for it in the candidate profile, for example through wording such as `experience in`, `background in`, `knowledge of`, or `familiarity with`.
-- Do not extract customer industries, product examples, application areas, project examples, or market context as candidate requirements unless the posting clearly frames them that way.
-- Do not extract broad business context such as `high-tech`, `medical`, `semiconductor`, or similar unless the posting clearly requires candidate background in that domain.
-- Do not infer a domain requirement from responsibilities alone.
+- Extract a domain only when the posting clearly asks for candidate experience, background, knowledge, familiarity, or prior work in that domain.
+- Strong evidence includes wording such as `experience in`, `background in`, `knowledge of`, `familiarity with`, `worked in`, or equivalent candidate-facing requirement language.
+- Do not extract customer industries, served markets, product examples, application areas, project examples, or company business context as candidate requirements unless the posting clearly frames them as required candidate background.
+- Do not extract domains from phrases that describe who the clients are, what products are built, or where the solutions are used.
+- Do not extract broad business context such as `high-tech`, `medical`, `semiconductor`, `analytical`, or similar unless the posting clearly requires candidate background in that domain.
+- Do not infer a domain requirement from responsibilities, project scope, technical examples, or collaboration context alone.
+- If the posting describes only the work context and not the candidate background, leave `required` empty.
 - Normalize values to lowercase.
 - Keep values distinct and deduplicated.
 - Leave `required` empty, `confidence` at `0.0`, and `evidence` empty when the vacancy does not clearly specify domain requirements.
@@ -135,16 +138,17 @@ Extract mobility-related constraints only when the vacancy clearly states them a
 
 Extract legal or compliance-related constraints only when the vacancy clearly states them as candidate-facing requirements.
 
-- `work_authorization_required` indicates whether the role explicitly requires legal authorization to work in a country or region.
-- `export_control_required` indicates whether the role explicitly states export control, controlled-technology access, or similar access restrictions.
+- `work_authorization_required` indicates that the vacancy explicitly requires legal authorization to work in a specific country or region.
+- Set `work_authorization_required` only when the posting clearly refers to the right to work, visa status, sponsorship, residence/work permit, or legal authorization to work in a country or region.
+- `export_control_required` indicates that the vacancy explicitly states export control, controlled-technology access, nationality-based access restrictions, or similar controlled-access restrictions.
+- If the posting states only controlled-technology access restrictions, set only `export_control_required` and leave `work_authorization_required` unset.
+- Do not treat “legally authorized to access controlled technology” as evidence for `work_authorization_required`.
+- Do not convert export-control language, controlled-technology language, or access-eligibility language into generic work authorization unless the posting explicitly states both.
 - `background_check_required` indicates whether the role explicitly states screening or background-check requirements.
 - `security_clearance_required` indicates whether the role explicitly states a clearance requirement.
 - Do not infer legal or compliance blockers from regulated-industry context alone.
-- Do not convert export-control language into generic work-authorization requirements unless the posting explicitly states both.
-- If the posting states only controlled-technology access restrictions, set only `export_control_required` and leave `work_authorization_required` unset.
 - Treat these fields conservatively because false negatives are costly.
 - Leave fields unset when the vacancy does not clearly specify them.
-
 
 Source text:
 {{SOURCE_TEXT}}
