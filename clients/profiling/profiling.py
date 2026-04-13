@@ -14,7 +14,7 @@ from shared.llm import OpenAIStructuredExtractor, load_text_file, render_templat
 ProfileModelT = TypeVar("ProfileModelT", bound=BaseModel)
 
 DEFAULT_PROFILE_LLM_MODEL = "gpt-5.4-mini"
-DEFAULT_PROFILE_MAX_COMPLETION_TOKENS = 3000
+DEFAULT_PROFILE_MAX_COMPLETION_TOKENS = 5000
 PROFILE_TIMEOUT_SECONDS = 60.0
 
 MODULE_DIR = Path(__file__).resolve().parent

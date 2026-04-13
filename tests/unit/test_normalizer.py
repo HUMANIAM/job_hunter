@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from shared.normalizer import (
+    dedupe_by_normalized_key,
     normalize_and_dedupe_texts,
     normalize_taxonomy_name,
     normalize_text,
@@ -39,6 +40,22 @@ def test_normalize_and_dedupe_texts_dedupes_case_insensitively() -> None:
     assert normalize_and_dedupe_texts(
         [" Eindhoven ", "eindhoven", "", " Hybrid  ", "hybrid"]
     ) == ["Eindhoven", "Hybrid"]
+
+def test_dedupe_by_normalized_key_preserves_first_item_per_normalized_key() -> None:
+    deduped = dedupe_by_normalized_key(
+        [
+            " Python ",
+            "python",
+            " ",
+            "Rust",
+        ],
+        key_selector=lambda item: item,
+    )
+
+    assert deduped == [
+        " Python ",
+        "Rust",
+    ]
 
 
 def test_normalize_job_tag_key_lowercases_normalized_text() -> None:

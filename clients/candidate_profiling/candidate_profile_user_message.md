@@ -149,23 +149,43 @@ Extract human languages the candidate clearly appears able to use.
 - Evidence must use the strongest supporting clues available.
 
 
-### technical_core_features
+### technical_experience
 
-Extract the candidate’s core technical capabilities that are clearly supported by the source text.
+Extract the candidate’s technical experience from the source text.
 
-- Return a list of technical feature items with `name`, `strength`, `confidence`, and `evidence`.
-- Use `core` for defining technical strengths, `strong` for clearly supported strengths, `secondary` for meaningful but less central capabilities, and `exposure` for weaker but real exposure.
-- Extract only core technical signals relevant to the candidate’s professional profile.
-- Do not let one isolated tool, framework, or project mention redefine the candidate’s core profile.
-- Do not convert minor exposure into a core strength.
+Shared rules for all subsections:
+
+- Return structured feature items with `name`, `strength`, `confidence`, and `evidence`.
+- Use `core` for defining strengths, `strong` for clearly supported strengths, `secondary` for meaningful but less central strengths, and `exposure` for weaker but real exposure.
+- Extract only signals supported by the source text.
+- Prefer extraction over summarization.
 - Normalize values to lowercase.
 - Keep values distinct and deduplicated.
-- Extract compact normalized items, not summaries.
-- Each extracted item must represent one concept only.
-- Do not merge multiple concepts into a single item.
-- Do not rewrite several related signals into a broader category.
-- Prefer the closest normalized term supported by the source text.
-- Keep distinct signals separate when they may matter independently for matching.
+- Each item must represent one concept only.
+- Do not merge multiple concepts into one item.
+- Do not invent broader labels when the source supports a more exact term.
+- Keep concrete signals separate when they may matter independently later.
+
+#### technical_core_features
+
+Extract broad technical experience areas that describe the candidate’s professional profile.
+
+- Use this field for high-level technical experience areas only.
+- Good examples: `testing`, `ci/cd`, `software design and implementation`, `r&d software engineering`.
+- Do not use this field for concrete programming languages, tools, frameworks, protocols, or libraries.
+- Do not rewrite concrete signals into a broad category if they belong in a more specific field.
+
+#### technologies
+
+Extract concrete technologies clearly supported by the source text.
+
+- This field includes programming languages, frameworks, libraries, tools, platforms, protocols, standards, databases, build systems, testing technologies, and infrastructure technologies.
+- Examples: `c`, `c++`, `python`, `cmake`, `bazel`, `docker`, `git`, `pytest`, `googletest`, `robot framework`, `some/ip`, `ara com`, `rpc`, `tensorflow`, `pytorch`, `opencv`, `kaldi`, `mysql`, `sqlite`, `jenkins`.
+- Keep exact supported terms where possible.
+- Keep each item as one concept only.
+- Do not merge multiple technologies into one item.
+- Do not rewrite concrete technologies into broad labels.
+- Do not populate this field with broad experience labels such as `testing`, `ci/cd`, or `software design and implementation`; those belong in `technical_core_features`.
 
 
 ### domain_background

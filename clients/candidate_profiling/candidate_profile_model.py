@@ -4,7 +4,7 @@ from typing import List, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from shared.normalizer import normalize_taxonomy_name
+from shared.normalizer import dedupe_by_normalized_key, normalize_taxonomy_name
 from shared.profiling import Education, Experience, RoleTitles, SupportedFieldMixin
 
 Strength = Literal["core", "strong", "secondary", "exposure"]
@@ -32,16 +32,29 @@ class StrengthFeature(SupportedFieldMixin):
 
 
 def normalize_feature_list(values: List[StrengthFeature]) -> List[StrengthFeature]:
-    seen: set[str] = set()
-    result: List[StrengthFeature] = []
+    return dedupe_by_normalized_key(
+        values,
+        key_selector=lambda item: item.name,
+    )
 
-    for item in values:
-        if item.name in seen:
-            continue
-        seen.add(item.name)
-        result.append(item)
 
-    return result
+class TechnicalExperience(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    technical_core_features: List[StrengthFeature] = Field(default_factory=list)
+    technologies: List[StrengthFeature] = Field(default_factory=list)
+
+    @field_validator(
+        "technical_core_features",
+        "technologies",
+        mode="after",
+    )
+    @classmethod
+    def validate_feature_lists(
+        cls,
+        values: List[StrengthFeature],
+    ) -> List[StrengthFeature]:
+        return normalize_feature_list(values)
 
 
 class CandidateProfile(BaseModel):
@@ -50,13 +63,12 @@ class CandidateProfile(BaseModel):
     role_titles: RoleTitles
     education: Education = Field(default_factory=Education)
     experience: Experience = Field(default_factory=Experience)
+    technical_experience: TechnicalExperience = Field(default_factory=TechnicalExperience)
     languages: List[StrengthFeature] = Field(default_factory=list)
-    technical_core_features: List[StrengthFeature] = Field(default_factory=list)
     domain_background: List[StrengthFeature] = Field(default_factory=list)
 
     @field_validator(
         "languages",
-        "technical_core_features",
         "domain_background",
         mode="after",
     )
@@ -68,4 +80,4 @@ class CandidateProfile(BaseModel):
         return normalize_feature_list(values)
 
 
-__all__ = ["CandidateProfile", "StrengthFeature"]
+__all__ = ["CandidateProfile", "StrengthFeature", "TechnicalExperience"]
