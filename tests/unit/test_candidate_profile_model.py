@@ -53,26 +53,28 @@ def test_candidate_profile_normalizes_shared_sections() -> None:
                     "evidence": ["Basic German course"],
                 },
             ],
-            "technical_core_features": [
-                {
-                    "name": " Python ",
-                    "strength": "core",
-                    "confidence": 0.9,
-                    "evidence": ["Python and CAN experience"],
-                },
-                {
-                    "name": "python",
-                    "strength": "strong",
-                    "confidence": 0.8,
-                    "evidence": ["Backend services in Python"],
-                },
-                {
-                    "name": " CAN ",
-                    "strength": "strong",
-                    "confidence": 0.85,
-                    "evidence": ["Worked with CAN diagnostics"],
-                },
-            ],
+            "technical_experience": {
+                "technical_core_features": [
+                    {
+                        "name": " Python ",
+                        "strength": "core",
+                        "confidence": 0.9,
+                        "evidence": ["Python and CAN experience"],
+                    },
+                    {
+                        "name": "python",
+                        "strength": "strong",
+                        "confidence": 0.8,
+                        "evidence": ["Backend services in Python"],
+                    },
+                    {
+                        "name": " CAN ",
+                        "strength": "strong",
+                        "confidence": 0.85,
+                        "evidence": ["Worked with CAN diagnostics"],
+                    },
+                ],
+            },
             "domain_background": [
                 {
                     "name": " Semiconductor ",
@@ -100,10 +102,10 @@ def test_candidate_profile_normalizes_shared_sections() -> None:
         ("english", "strong"),
         ("german", "exposure"),
     ]
-    assert [(item.name, item.strength) for item in profile.technical_core_features] == [
-        ("python", "core"),
-        ("can", "strong"),
-    ]
+    assert [
+        (item.name, item.strength)
+        for item in profile.technical_experience.technical_core_features
+    ] == [("python", "core"), ("can", "strong")]
     assert [(item.name, item.strength) for item in profile.domain_background] == [
         ("semiconductor", "strong"),
     ]
@@ -121,14 +123,16 @@ def test_candidate_profile_requires_evidence_for_feature_items() -> None:
                     "confidence": 0.91,
                     "evidence": ["CV headline: Embedded Software Engineer"],
                 },
-                "technical_core_features": [
-                    {
-                        "name": "python",
-                        "strength": "core",
-                        "confidence": 0.8,
-                        "evidence": [],
-                    }
-                ],
+                "technical_experience": {
+                    "technical_core_features": [
+                        {
+                            "name": "python",
+                            "strength": "core",
+                            "confidence": 0.8,
+                            "evidence": [],
+                        }
+                    ]
+                },
             }
         )
 
