@@ -231,7 +231,7 @@ def test_evaluate_eligibility_uses_structured_extractor_with_rendered_prompt() -
                                         {
                                             "field": "role_titles",
                                             "decision": "partial",
-                                            "score": 0.72,
+                                            "confidence": 0.72,
                                             "evidence": ["primary titles are related"],
                                         }
                                     ],
@@ -264,7 +264,7 @@ def test_evaluate_eligibility_uses_structured_extractor_with_rendered_prompt() -
                 {
                     "field": "role_titles",
                     "decision": "partial",
-                    "score": 0.72,
+                    "confidence": 0.72,
                     "evidence": ["primary titles are related"],
                 }
             ],

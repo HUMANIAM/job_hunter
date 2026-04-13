@@ -20,7 +20,7 @@ class FieldAssessment(BaseModel):
         "technologies",
     ]
     decision: FieldDecision
-    score: float = Field(ge=0.0, le=1.0)
+    confidence: float = Field(ge=0.0, le=1.0)
     evidence: List[str] = Field(default_factory=list)
 
 
