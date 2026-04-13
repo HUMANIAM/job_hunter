@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -164,11 +164,14 @@ class Education(SupportedFieldMixin):
         return self
 
 
+SeniorityBand = Literal["junior", "standard", "senior", "lead", "principal"]
+
+
 class Experience(SupportedFieldMixin):
     model_config = ConfigDict(extra="forbid")
 
     min_years: Optional[int] = None
-    seniority_band: Optional[str] = None
+    seniority_band: Optional[SeniorityBand] = None
 
     @field_validator("min_years", mode="before")
     @classmethod
@@ -177,7 +180,7 @@ class Experience(SupportedFieldMixin):
 
     @field_validator("seniority_band", mode="before")
     @classmethod
-    def validate_seniority_band(cls, value: Any) -> Optional[str]:
+    def validate_seniority_band(cls, value: Any) -> Optional[SeniorityBand]:
         return _normalize_optional_text(value)
 
     @model_validator(mode="after")
@@ -331,6 +334,7 @@ __all__ = [
     "MobilityConstraints",
     "RequirementTexts",
     "RoleTitles",
+    "SeniorityBand",
     "SupportedFieldMixin",
     "WorkModeConstraints",
 ]

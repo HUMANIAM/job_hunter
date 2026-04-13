@@ -56,7 +56,7 @@ Extract the education requirements that are clearly supported by the source text
 Extract the experience requirements that are clearly supported by the source text.
 
 - `min_years` is the minimum clearly stated years of relevant professional experience, if any.
-- `seniority_band` is the clearest explicitly supported seniority level, if any, such as `junior`, `medior`, `senior`, `lead`, or `principal`.
+- `seniority_band` is the clearest explicitly supported seniority level, if any, and must be one of `junior`, `standard`, `senior`, `lead`, or `principal`.
 - Do not infer `min_years` from seniority labels alone.
 - Do not infer seniority from one isolated responsibility or tool mention.
 - Do not promote internships, education, or general exposure into professional experience.

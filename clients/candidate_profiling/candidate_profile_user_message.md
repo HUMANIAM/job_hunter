@@ -64,28 +64,90 @@ Extract the education background that is clearly supported by the source text.
 
 Extract the candidate experience that is clearly supported by the source text.
 
-- `min_years` is the best conservative estimate of relevant professional experience clearly supported by the CV, if any.
-- `seniority_band` is the clearest supported seniority level, if any, such as `junior`, `medior`, `senior`, `lead`, or `principal`.
-- Do not infer `min_years` from seniority labels alone.
-- Do not infer seniority from one isolated responsibility or tool mention.
-- Do not promote internships, education, hobbies, or general exposure into professional experience.
-- Set `seniority_band` only when the CV explicitly states it or the work history clearly supports it.
+- `min_years` is the best conservative estimate of total relevant professional experience derived from the candidate’s listed professional work experience dates.
+- Calculate `min_years` only from explicit professional role date ranges in the CV.
+- Treat roles marked `current` or equivalent as ending on the extraction date.
+- Do not double-count overlapping roles.
+- Do not count internships, education, hobbies, courses, certifications, projects, or general exposure as professional experience.
+- If the dates are incomplete or ambiguous, use the most conservative estimate clearly supported by the source text.
+
+- `seniority_band` must be one of `junior`, `standard`, `senior`, `lead`, or `principal`.
+- Derive `seniority_band` from the calculated `min_years` when the work history clearly supports it.
+- Do not infer `seniority_band` from one isolated responsibility, tool, or title alone.
+
+Use this mapping:
+- `junior`: 1 <= years < 3
+- `standard`: 3 <= years < 5
+- `senior`: 5 <= years < 10
+- `lead`: 10 <= years < 12
+- `principal`: years >= 12
+
+### Evidence rules for experience
+
+- Evidence must come only from the listed professional experience entries used in the calculation.
+- Evidence must be explicit date-bearing role snippets from the CV.
+- Include all professional role entries used to derive `min_years`.
+- Do not use summary text, skills sections, project sections, education, or technology lists as evidence for this field.
+- Do not use partial evidence when the calculation depends on additional roles; include the full set of roles used.
+- If explicit professional experience entries are not sufficient, leave the field unset.
+
 - Normalize values to lowercase where applicable.
 - Leave fields unset when the CV does not clearly support them.
+
 
 ### languages
 
 Extract human languages the candidate clearly appears able to use.
 
 - Return a list of language items with `name`, `strength`, `confidence`, and `evidence`.
-- Extract only human languages such as `english`, `german`, or `dutch`.
-- Do not treat programming languages, technology lists, or sections labeled `Languages:` that enumerate technologies as human languages.
-- Use `core` or `strong` only when the CV clearly supports real professional or fluent use of the human language.
-- Use `secondary` or `exposure` for weaker but still meaningful human-language evidence.
-- Do not infer languages from location alone.
-- Do not convert a weak clue into a strong language claim.
-- Normalize values to lowercase.
+- Extract only human languages such as `english`, `arabic`, `dutch`, or `german`.
+- Never extract programming languages or technologies as human languages.
+
+#### Extraction order
+
+1. If the CV explicitly mentions a human language, extract it from that explicit evidence.
+2. If the CV does not explicitly mention human languages, infer them only from strong real-world evidence.
+
+#### Valid evidence for inferred human languages
+
+- repeated professional work in multinational or clearly English-based environments
+- work experience at companies or teams where professional English use is clearly implied
+- birthplace, nationality, or home-country context when it strongly supports the native language
+- long-term residence or work in a country can support the local language, but this is weaker than explicit mention or strong professional evidence
+
+#### Invalid evidence
+
+- programming-language lists
+- technology stacks
+- sections labeled `Languages:` that contain only technologies
+- person name
+- phone number
+- email
+- location alone, unless used only as a weak clue for the local language
+
+#### Strength rules
+
+- `core`: explicit strong evidence of fluent or professional use, or repeated direct support across the CV
+- `strong`: strong inferred evidence from repeated professional context or strongly supported native-language context
+- `secondary`: weaker but still meaningful evidence, such as living or working in a country where the language is commonly used
+- `exposure`: weak but valid clue that does not support stronger certainty
+
+#### Specific inference rules
+
+- If a human language is explicitly mentioned, prefer that over inference.
+- Do not infer additional languages unless the CV clearly supports them.
+- Repeated work in multinational engineering environments can be strong evidence for `english`.
+- Birthplace or clear country-of-origin context can be strong evidence for the native language of that country.
+- Living or working in the Netherlands can support `dutch`, but usually only as `secondary` unless the CV gives stronger support.
+- Do not use one weak clue to create a strong language claim.
+
+#### Output rules
+
+- If no valid human-language evidence exists, return an empty list.
+- Normalize language names to lowercase.
 - Keep values distinct and deduplicated.
+- Evidence must use the strongest supporting clues available.
+
 
 ### technical_core_features
 
@@ -98,6 +160,13 @@ Extract the candidate’s core technical capabilities that are clearly supported
 - Do not convert minor exposure into a core strength.
 - Normalize values to lowercase.
 - Keep values distinct and deduplicated.
+- Extract compact normalized items, not summaries.
+- Each extracted item must represent one concept only.
+- Do not merge multiple concepts into a single item.
+- Do not rewrite several related signals into a broader category.
+- Prefer the closest normalized term supported by the source text.
+- Keep distinct signals separate when they may matter independently for matching.
+
 
 ### domain_background
 

@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from clients.job_profiling.profiling.vacancy_profile_model import (
+    Experience,
     Education,
     RoleTitles,
     VacancyProfile,
@@ -114,6 +115,15 @@ def test_education_requires_evidence_when_requirements_are_set() -> None:
             min_level="bachelor",
             confidence=0.84,
             evidence=[],
+        )
+
+
+def test_experience_rejects_unknown_seniority_band() -> None:
+    with pytest.raises(ValidationError, match="Input should be"):
+        Experience(
+            seniority_band="principle",
+            confidence=0.84,
+            evidence=["Principal-level ownership"],
         )
 
 
