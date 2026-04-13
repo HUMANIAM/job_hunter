@@ -86,10 +86,12 @@ def _normalize_optional_text(value: Any) -> Optional[str]:
 
 
 def _normalize_text_list(values: List[str]) -> List[str]:
-    return normalize_and_dedupe_texts(normalize_taxonomy_name(value) for value in values)
+    return normalize_and_dedupe_texts(
+        normalize_taxonomy_name(value) for value in values
+    )
 
 
-class _SupportedFieldMixin(BaseModel):
+class SupportedFieldMixin(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     confidence: float = 0.0
@@ -106,7 +108,7 @@ class _SupportedFieldMixin(BaseModel):
         return normalize_and_dedupe_texts(values)
 
 
-class RoleTitles(_SupportedFieldMixin):
+class RoleTitles(SupportedFieldMixin):
     model_config = ConfigDict(extra="forbid")
 
     primary: str
@@ -136,7 +138,7 @@ class RoleTitles(_SupportedFieldMixin):
         return self
 
 
-class Education(_SupportedFieldMixin):
+class Education(SupportedFieldMixin):
     model_config = ConfigDict(extra="forbid")
 
     min_level: Optional[str] = None
@@ -162,7 +164,7 @@ class Education(_SupportedFieldMixin):
         return self
 
 
-class Experience(_SupportedFieldMixin):
+class Experience(SupportedFieldMixin):
     model_config = ConfigDict(extra="forbid")
 
     min_years: Optional[int] = None
@@ -188,7 +190,7 @@ class Experience(_SupportedFieldMixin):
         return self
 
 
-class ClassifiedTexts(_SupportedFieldMixin):
+class ClassifiedTexts(SupportedFieldMixin):
     model_config = ConfigDict(extra="forbid")
 
     required: List[str] = Field(default_factory=list)
@@ -211,7 +213,7 @@ class ClassifiedTexts(_SupportedFieldMixin):
         return self
 
 
-class RequirementTexts(_SupportedFieldMixin):
+class RequirementTexts(SupportedFieldMixin):
     model_config = ConfigDict(extra="forbid")
 
     required: List[str] = Field(default_factory=list)
@@ -230,7 +232,7 @@ class RequirementTexts(_SupportedFieldMixin):
         return self
 
 
-class WorkModeConstraints(_SupportedFieldMixin):
+class WorkModeConstraints(SupportedFieldMixin):
     model_config = ConfigDict(extra="forbid")
 
     onsite: Optional[bool] = None
@@ -263,7 +265,7 @@ class WorkModeConstraints(_SupportedFieldMixin):
         return self
 
 
-class MobilityConstraints(_SupportedFieldMixin):
+class MobilityConstraints(SupportedFieldMixin):
     model_config = ConfigDict(extra="forbid")
 
     travel_required: Optional[bool] = None
@@ -287,7 +289,7 @@ class MobilityConstraints(_SupportedFieldMixin):
         return self
 
 
-class LegalAndComplianceConstraints(_SupportedFieldMixin):
+class LegalAndComplianceConstraints(SupportedFieldMixin):
     model_config = ConfigDict(extra="forbid")
 
     work_authorization_required: Optional[bool] = None
@@ -321,28 +323,14 @@ class LegalAndComplianceConstraints(_SupportedFieldMixin):
         return self
 
 
-class VacancyProfile(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    role_titles: RoleTitles
-    education: Education = Field(default_factory=Education)
-    experience: Experience = Field(default_factory=Experience)
-    languages: ClassifiedTexts = Field(default_factory=ClassifiedTexts)
-    technical_core_requirements: ClassifiedTexts = Field(
-        default_factory=ClassifiedTexts
-    )
-    domain_or_industry_requirements: RequirementTexts = Field(
-        default_factory=RequirementTexts
-    )
-    work_mode_constraints: WorkModeConstraints = Field(
-        default_factory=WorkModeConstraints
-    )
-    mobility_constraints: MobilityConstraints = Field(
-        default_factory=MobilityConstraints
-    )
-    legal_and_compliance_constraints: LegalAndComplianceConstraints = Field(
-        default_factory=LegalAndComplianceConstraints
-    )
-
-
-__all__ = ["VacancyProfile"]
+__all__ = [
+    "ClassifiedTexts",
+    "Education",
+    "Experience",
+    "LegalAndComplianceConstraints",
+    "MobilityConstraints",
+    "RequirementTexts",
+    "RoleTitles",
+    "SupportedFieldMixin",
+    "WorkModeConstraints",
+]

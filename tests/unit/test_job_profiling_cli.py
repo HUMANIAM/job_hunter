@@ -2,15 +2,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-import sys
-from types import ModuleType
 
 import pytest
-
-if "clients.profiling" not in sys.modules:
-    profiling = ModuleType("clients.profiling")
-    profiling.profile_vacancy_text = lambda _cleaned_text: None
-    sys.modules["clients.profiling"] = profiling
 
 from clients.job_profiling import job_profiling_cli
 

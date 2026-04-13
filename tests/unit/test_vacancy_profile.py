@@ -3,7 +3,7 @@ import sys
 import pytest
 from pydantic import ValidationError
 
-from clients.profiling.vacancy_profile_model import (
+from clients.job_profiling.profiling.vacancy_profile_model import (
     Education,
     RoleTitles,
     VacancyProfile,
