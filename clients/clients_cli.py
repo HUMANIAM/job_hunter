@@ -16,6 +16,7 @@ from playwright.sync_api import sync_playwright
 from clients.clients import Client, parse_client
 from clients.registry import get_client_adapter
 from infra.browser import launched_chromium
+from reporting.writer import raw_html_filename
 
 
 def _positive_int(value: str) -> int:
@@ -57,11 +58,15 @@ def main(argv: Sequence[str] | None = None) -> None:
         with launched_chromium(playwright, headless=True) as browser:
             links = adapter.collect_job_links(browser, job_limit=args.job_limit)
             if args.download:
-                download_job_html_pages(
+                pages = download_job_html_pages(
                     browser,
                     links,
-                    Path("data/refactor/jobs") / client.value / "html",
                 )
+                output_dir = Path("data/refactor/jobs") / client.value / "html"
+                output_dir.mkdir(parents=True, exist_ok=True)
+                for page in pages:
+                    output_path = output_dir / raw_html_filename(page.title, page.url)
+                    output_path.write_text(page.html_content, encoding="utf-8")
 
     print("================ retrieved links ===================")
     for link in links:
