@@ -13,6 +13,7 @@ if __package__ in {None, ""}:
     )
 
 from clients.candidate_profiling.candidate_profile_model import CandidateProfile
+from clients.eligibility.eligibility_response_model import EligibilityResponse
 from clients.eligibility.eligibilty import evaluate_eligibility
 from clients.job_profiling.profiling.job_profile_model import VacancyProfile
 from infra import json_io
@@ -25,6 +26,7 @@ DEFAULT_CANDIDATE_PROFILE_INPUT_PATH = Path(
 DEFAULT_VACANCY_PROFILE_INPUT_PATH = Path("data/refactor/jobs/sioux/vacancy_profiles")
 DEFAULT_ELIGIBILITY_OUTPUT_PATH = Path("data/refactor/eligibility")
 _SUPPORTED_PROFILE_SUFFIXES = (".json",)
+_SOFTWARE_TITLE_MARKERS = ("software", "firmware")
 
 
 @dataclass
@@ -188,6 +190,7 @@ def _output_path_for(
     candidate_profile_path: Path,
     decision: str,
     company_name: str,
+    role_classification: str,
     vacancy_profile_path: Path,
     output_root: Path,
 ) -> Path:
@@ -196,6 +199,7 @@ def _output_path_for(
         / candidate_profile_path.stem
         / decision
         / company_name
+        / role_classification
         / vacancy_profile_path.name
     )
 
@@ -206,10 +210,26 @@ def _company_name_for(vacancy_profile_path: Path) -> str:
     return vacancy_profile_path.parent.name
 
 
+def _role_classification_for(vacancy_profile: VacancyProfile) -> str:
+    titles = [
+        vacancy_profile.role_titles.primary,
+        *vacancy_profile.role_titles.alternatives,
+    ]
+    normalized_titles = [title.lower() for title in titles]
+    if any(
+        marker in title
+        for title in normalized_titles
+        for marker in _SOFTWARE_TITLE_MARKERS
+    ):
+        return "software"
+    return "non-software"
+
+
 def _write_eligibility_result(
     *,
     candidate_profile_path: Path,
     vacancy_profile_path: Path,
+    vacancy_profile: VacancyProfile,
     output_root: Path,
     eligibility: EligibilityResponse,
 ) -> Path:
@@ -217,6 +237,7 @@ def _write_eligibility_result(
         candidate_profile_path,
         eligibility.decision,
         _company_name_for(vacancy_profile_path),
+        _role_classification_for(vacancy_profile),
         vacancy_profile_path,
         output_root,
     )
@@ -240,6 +261,7 @@ def _run_loaded_eligibility(
     output_path = _write_eligibility_result(
         candidate_profile_path=candidate_profile_path,
         vacancy_profile_path=vacancy_profile_path,
+        vacancy_profile=vacancy_profile,
         output_root=output_root,
         eligibility=eligibility,
     )

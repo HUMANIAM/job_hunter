@@ -33,7 +33,7 @@ Critical evaluation rules:
 - If the vacancy asks for a specific degree field and the candidate field is clearly different, education should be `mismatch` or at best `partial`, never a strong match based only on degree level.
 - If the vacancy role title and candidate role title belong to clearly different engineering tracks, treat `role_titles` as `mismatch`, not `partial`.
 - Do not treat adjacent engineering disciplines as interchangeable unless the profile clearly supports that transition.
-- A field with no vacancy requirement is neutral and must not increase the score.
+- A field with no vacancy requirement is neutral and must not increase the overall eligibility score.
 - Generic overlap such as bachelor level, seniority band, or English must not outweigh a clear mismatch in role identity and required technical experience.
 - Required technical mismatches matter more than preferred mismatches.
 - If most required technical core features are unmatched, that is strong evidence of `not_eligible`.
@@ -41,7 +41,7 @@ Critical evaluation rules:
 - If both role identity and required technical experience clearly mismatch, return `not_eligible`.
 - If the vacancy does not specify a requirement for a field, treat that field as neutral.
 - Neutral fields must not be labeled as `match`.
-- Neutral fields must not increase the score.
+- Neutral fields must not increase the overall eligibility score.
 - Do not present generic overlaps such as degree level, seniority band, or English as support reasons when the candidate is clearly in the wrong professional track.
 - For experience, distinguish years/seniority proximity from domain or role-relevant experience alignment.
 
@@ -52,11 +52,22 @@ Decision rules:
 - Return `not_eligible` when there is clear evidence of a real mismatch or blocker.
 - Obvious cross-discipline mismatch should be `not_eligible`, not `uncertain`.
 
+Score and confidence rules:
+
+- `eligibility_score` refers only to the overall eligibility score.
+- Do not use field-level scores.
+- For each field assessment, use `decision` and `confidence`.
+- `confidence` means how certain the model is about that field decision.
+- `confidence` is not a fit score and is not a substitute for the overall eligibility score.
+- A field may be `unknown` with high confidence when the vacancy does not specify that requirement or the input does not support evaluating it.
+- Neutral or unknown fields must not increase the overall eligibility score.
+
 Scoring guidance:
 
 - `eligible` means the candidate appears relevant and there is no clear blocker.
 - `uncertain` means there may be a fit, but the input does not justify a confident positive or negative decision.
 - `not_eligible` means there is a clear mismatch or blocker supported by the input.
+- The overall eligibility score should reflect the final eligibility judgment, not generic similarity.
 
 When writing evidence:
 
