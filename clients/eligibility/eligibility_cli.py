@@ -186,10 +186,46 @@ def _load_vacancy_profile(vacancy_profile_path: Path) -> VacancyProfile:
 
 def _output_path_for(
     candidate_profile_path: Path,
+    decision: str,
+    company_name: str,
     vacancy_profile_path: Path,
     output_root: Path,
 ) -> Path:
-    return output_root / candidate_profile_path.stem / vacancy_profile_path.name
+    return (
+        output_root
+        / candidate_profile_path.stem
+        / decision
+        / company_name
+        / vacancy_profile_path.name
+    )
+
+
+def _company_name_for(vacancy_profile_path: Path) -> str:
+    if vacancy_profile_path.parent.name == "vacancy_profiles":
+        return vacancy_profile_path.parent.parent.name
+    return vacancy_profile_path.parent.name
+
+
+def _write_eligibility_result(
+    *,
+    candidate_profile_path: Path,
+    vacancy_profile_path: Path,
+    output_root: Path,
+    eligibility: EligibilityResponse,
+) -> Path:
+    output_path = _output_path_for(
+        candidate_profile_path,
+        eligibility.decision,
+        _company_name_for(vacancy_profile_path),
+        vacancy_profile_path,
+        output_root,
+    )
+    json_io.write_json(
+        output_path,
+        eligibility.model_dump(mode="json"),
+    )
+    log(f"wrote file: {output_path}")
+    return output_path
 
 
 def _run_loaded_eligibility(
@@ -201,16 +237,12 @@ def _run_loaded_eligibility(
 ) -> EligibilityResult:
     vacancy_profile = _load_vacancy_profile(vacancy_profile_path)
     eligibility = evaluate_eligibility(candidate_profile, vacancy_profile)
-    output_path = _output_path_for(
-        candidate_profile_path,
-        vacancy_profile_path,
-        output_root,
+    output_path = _write_eligibility_result(
+        candidate_profile_path=candidate_profile_path,
+        vacancy_profile_path=vacancy_profile_path,
+        output_root=output_root,
+        eligibility=eligibility,
     )
-    json_io.write_json(
-        output_path,
-        eligibility.model_dump(mode="json"),
-    )
-    log(f"wrote file: {output_path}")
     return EligibilityResult(
         candidate_profile_path=candidate_profile_path,
         vacancy_profile_path=vacancy_profile_path,

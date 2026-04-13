@@ -11,6 +11,8 @@ from typing import Any, Callable, Generic, TypeVar
 from openai import OpenAI
 from pydantic import BaseModel
 
+from shared.env import require_env_value
+
 StructuredModelT = TypeVar("StructuredModelT", bound=BaseModel)
 
 
@@ -22,6 +24,15 @@ def load_text_file(path: Path) -> str:
 @lru_cache(maxsize=None)
 def load_json_file(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+@lru_cache(maxsize=None)
+def get_openai_client(*, error_context: str) -> OpenAI:
+    api_key = require_env_value(
+        "OPENAI_API_KEY",
+        error_context=error_context,
+    )
+    return OpenAI(api_key=api_key)
 
 
 def render_json(value: Any) -> str:

@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from shared.llm import (
     OpenAIStructuredExtractor,
     build_json_schema_example,
+    get_openai_client,
     render_template,
     resolve_json_schema_node,
 )
@@ -85,6 +86,23 @@ def test_render_template_replaces_all_placeholders() -> None:
     )
 
     assert rendered == "Hello Sioux, Sioux likes structured extraction."
+
+
+def test_get_openai_client_reads_api_key_from_env_helper(monkeypatch) -> None:
+    captured: list[tuple[str, str]] = []
+
+    class FakeOpenAI:
+        def __init__(self, *, api_key: str) -> None:
+            captured.append(("client", api_key))
+
+    get_openai_client.cache_clear()
+    monkeypatch.setattr("shared.llm.require_env_value", lambda name, *, error_context: f"{name}:{error_context}")
+    monkeypatch.setattr("shared.llm.OpenAI", FakeOpenAI)
+
+    client = get_openai_client(error_context="Eligibility evaluation")
+
+    assert isinstance(client, FakeOpenAI)
+    assert captured == [("client", "OPENAI_API_KEY:Eligibility evaluation")]
 
 
 def test_openai_structured_extractor_parses_structured_response() -> None:

@@ -11,6 +11,7 @@ from clients.eligibility import eligibility_cli
 class FakeEligibilityResponse:
     def __init__(self, payload: dict[str, object]) -> None:
         self._payload = payload
+        self.decision = str(payload["decision"])
 
     def model_dump(self, mode: str = "json") -> dict[str, object]:
         assert mode == "json"
@@ -81,7 +82,9 @@ def test_run_eligibility_supports_single_vacancy_profile(
         json.dumps(_candidate_profile_payload()),
         encoding="utf-8",
     )
-    vacancy_profile_path = tmp_path / "vacancy_embedded_software_engineer.json"
+    vacancy_profile_dir = tmp_path / "sioux" / "vacancy_profiles"
+    vacancy_profile_dir.mkdir(parents=True)
+    vacancy_profile_path = vacancy_profile_dir / "vacancy_embedded_software_engineer.json"
     vacancy_profile_path.write_text(
         json.dumps(_vacancy_profile_payload()),
         encoding="utf-8",
@@ -112,7 +115,13 @@ def test_run_eligibility_supports_single_vacancy_profile(
         output_path=output_root,
     )
 
-    expected_output_path = output_root / "Ibrahim_Saad_CV" / vacancy_profile_path.name
+    expected_output_path = (
+        output_root
+        / "Ibrahim_Saad_CV"
+        / "eligible"
+        / "sioux"
+        / vacancy_profile_path.name
+    )
     assert evaluate_calls == [
         ("embedded software engineer", "embedded software engineer")
     ]
@@ -133,8 +142,8 @@ def test_run_eligibility_for_input_path_supports_directory_output_dir(
         json.dumps(_candidate_profile_payload()),
         encoding="utf-8",
     )
-    vacancy_dir = tmp_path / "vacancy_profiles"
-    vacancy_dir.mkdir()
+    vacancy_dir = tmp_path / "sioux" / "vacancy_profiles"
+    vacancy_dir.mkdir(parents=True)
     first_vacancy_path = vacancy_dir / "a.json"
     second_vacancy_path = vacancy_dir / "b.json"
     first_vacancy_path.write_text(
@@ -169,7 +178,7 @@ def test_run_eligibility_for_input_path_supports_directory_output_dir(
         output_path=output_dir,
     )
 
-    candidate_output_dir = output_dir / "Ibrahim_Saad_CV"
+    candidate_output_dir = output_dir / "Ibrahim_Saad_CV" / "eligible" / "sioux"
     assert [result.vacancy_profile_path for result in results] == [
         first_vacancy_path,
         second_vacancy_path,
@@ -195,8 +204,8 @@ def test_run_eligibility_for_input_path_supports_n_limit(
         json.dumps(_candidate_profile_payload()),
         encoding="utf-8",
     )
-    vacancy_dir = tmp_path / "vacancy_profiles"
-    vacancy_dir.mkdir()
+    vacancy_dir = tmp_path / "sioux" / "vacancy_profiles"
+    vacancy_dir.mkdir(parents=True)
     for stem in ("a", "b", "c"):
         (vacancy_dir / f"{stem}.json").write_text(
             json.dumps(_vacancy_profile_payload(primary_role=stem)),
@@ -219,7 +228,9 @@ def test_run_eligibility_for_input_path_supports_n_limit(
     )
 
     assert len(results) == 2
-    assert len(list((output_dir / "Ibrahim_Saad_CV").glob("*.json"))) == 2
+    assert len(
+        list((output_dir / "Ibrahim_Saad_CV" / "eligible" / "sioux").glob("*.json"))
+    ) == 2
 
 
 def test_run_eligibility_for_input_path_rejects_file_output_path(
@@ -230,8 +241,8 @@ def test_run_eligibility_for_input_path_rejects_file_output_path(
         json.dumps(_candidate_profile_payload()),
         encoding="utf-8",
     )
-    vacancy_dir = tmp_path / "vacancy_profiles"
-    vacancy_dir.mkdir()
+    vacancy_dir = tmp_path / "sioux" / "vacancy_profiles"
+    vacancy_dir.mkdir(parents=True)
     (vacancy_dir / "vacancy.json").write_text(
         json.dumps(_vacancy_profile_payload()),
         encoding="utf-8",

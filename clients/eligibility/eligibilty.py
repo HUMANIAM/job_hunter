@@ -10,14 +10,18 @@ from clients.candidate_profiling.candidate_profile_model import CandidateProfile
 from clients.eligibility.eligibility_input_view import EligibilityInputView
 from clients.eligibility.eligibility_response_model import EligibilityResponse
 from clients.job_profiling.profiling.job_profile_model import VacancyProfile
-from shared.env import require_env_value
-from shared.llm import OpenAIStructuredExtractor, load_text_file, render_template
+from shared.llm import (
+    OpenAIStructuredExtractor,
+    get_openai_client,
+    load_text_file,
+    render_template,
+)
 
 MODULE_DIR = Path(__file__).resolve().parent
 ELIGIBILTY_USER_MESSAGE_PATH = MODULE_DIR / "eligibilty_user_message.md"
 ELIGIBILTY_SYSTEM_MESSAGE_PATH = MODULE_DIR / "eligibilty_system_message.md"
 
-DEFAULT_ELIGIBILITY_LLM_MODEL = "gpt-5.4-mini"
+DEFAULT_ELIGIBILITY_LLM_MODEL = "gpt-5.2"
 DEFAULT_ELIGIBILITY_MAX_COMPLETION_TOKENS = 1800
 ELIGIBILITY_TIMEOUT_SECONDS = 60.0
 
@@ -36,15 +40,6 @@ def _load_eligibilty_user_message_template() -> str:
 @lru_cache(maxsize=1)
 def _load_eligibilty_system_message() -> str:
     return load_text_file(ELIGIBILTY_SYSTEM_MESSAGE_PATH)
-
-
-@lru_cache(maxsize=1)
-def _get_openai_client() -> OpenAI:
-    api_key = require_env_value(
-        "OPENAI_API_KEY",
-        error_context="Eligibility evaluation",
-    )
-    return OpenAI(api_key=api_key)
 
 
 def render_eligibilty_user_message(
@@ -77,7 +72,7 @@ def evaluate_eligibility(
     timeout_seconds: float = ELIGIBILITY_TIMEOUT_SECONDS,
 ) -> EligibilityResponse:
     extractor = OpenAIStructuredExtractor(
-        client=client or _get_openai_client(),
+        client=client or get_openai_client(error_context="Eligibility evaluation"),
         model=model,
         response_format=EligibilityResponse,
         system_message=_load_eligibilty_system_message(),

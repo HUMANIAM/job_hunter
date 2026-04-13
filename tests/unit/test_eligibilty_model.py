@@ -17,13 +17,13 @@ def test_eligibility_response_accepts_valid_assessments() -> None:
                 {
                     "field": "role_titles",
                     "decision": "match",
-                    "score": 0.95,
+                    "confidence": 0.95,
                     "evidence": ["primary titles match closely"],
                 },
                 {
                     "field": "languages",
                     "decision": "partial",
-                    "score": 0.6,
+                    "confidence": 0.6,
                     "evidence": ["required english is present"],
                 },
             ],
@@ -49,7 +49,7 @@ def test_eligibility_response_rejects_scores_outside_unit_interval() -> None:
         )
 
 
-def test_eligibility_response_rejects_invalid_field_assessment_score() -> None:
+def test_eligibility_response_rejects_invalid_field_assessment_confidence() -> None:
     with pytest.raises(ValidationError, match="greater than or equal to 0"):
         EligibilityResponse.model_validate(
             {
@@ -61,7 +61,7 @@ def test_eligibility_response_rejects_invalid_field_assessment_score() -> None:
                     {
                         "field": "experience",
                         "decision": "unknown",
-                        "score": -0.01,
+                        "confidence": -0.01,
                         "evidence": [],
                     }
                 ],
