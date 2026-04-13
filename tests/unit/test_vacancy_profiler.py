@@ -158,7 +158,7 @@ def test_profile_vacancy_text_delegates_to_shared_extractor(monkeypatch) -> None
 
 def test_profile_extractor_defaults_target_mini_model() -> None:
     assert shared_profiler_module.DEFAULT_PROFILE_LLM_MODEL == "gpt-5.4-mini"
-    assert shared_profiler_module.DEFAULT_PROFILE_MAX_COMPLETION_TOKENS == 1200
+    assert shared_profiler_module.DEFAULT_PROFILE_MAX_COMPLETION_TOKENS == 3000
 
 
 def test_profile_extractor_exports_only_external_entrypoint() -> None:

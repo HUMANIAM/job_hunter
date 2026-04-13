@@ -131,3 +131,21 @@ def test_candidate_profile_requires_evidence_for_feature_items() -> None:
                 ],
             }
         )
+
+
+def test_candidate_profile_rejects_unknown_seniority_band() -> None:
+    with pytest.raises(ValidationError, match="Input should be"):
+        CandidateProfile.model_validate(
+            {
+                "role_titles": {
+                    "primary": "embedded software engineer",
+                    "confidence": 0.91,
+                    "evidence": ["CV headline: Embedded Software Engineer"],
+                },
+                "experience": {
+                    "seniority_band": "medior",
+                    "confidence": 0.8,
+                    "evidence": ["Senior embedded systems experience"],
+                },
+            }
+        )
