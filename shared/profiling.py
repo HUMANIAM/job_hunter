@@ -5,6 +5,7 @@ from typing import Any, List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from shared.normalizer import (
+    dedupe_by_normalized_key,
     normalize_and_dedupe_texts,
     normalize_taxonomy_name,
     normalize_text,
@@ -193,6 +194,37 @@ class Experience(SupportedFieldMixin):
         return self
 
 
+Strength = Literal["core", "strong", "secondary", "exposure"]
+
+
+class StrengthFeature(SupportedFieldMixin):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    strength: Strength
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def validate_name(cls, value: object) -> str:
+        normalized = normalize_taxonomy_name(value)
+        if not normalized:
+            raise ValueError("name must not be empty")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_supporting_evidence(self) -> "StrengthFeature":
+        if not self.evidence:
+            raise ValueError("evidence must not be empty")
+        return self
+
+
+def normalize_feature_list(values: List[StrengthFeature]) -> List[StrengthFeature]:
+    return dedupe_by_normalized_key(
+        values,
+        key_selector=lambda item: item.name,
+    )
+
+
 class ClassifiedTexts(SupportedFieldMixin):
     model_config = ConfigDict(extra="forbid")
 
@@ -335,6 +367,10 @@ __all__ = [
     "RequirementTexts",
     "RoleTitles",
     "SeniorityBand",
+    "Strength",
+    "StrengthFeature",
     "SupportedFieldMixin",
+    "TechnicalExperience",
     "WorkModeConstraints",
+    "normalize_feature_list",
 ]

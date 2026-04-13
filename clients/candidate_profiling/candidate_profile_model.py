@@ -1,42 +1,16 @@
 from __future__ import annotations
 
-from typing import List, Literal
+from typing import List
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from shared.normalizer import dedupe_by_normalized_key, normalize_taxonomy_name
-from shared.profiling import Education, Experience, RoleTitles, SupportedFieldMixin
-
-Strength = Literal["core", "strong", "secondary", "exposure"]
-
-
-class StrengthFeature(SupportedFieldMixin):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    strength: Strength
-
-    @field_validator("name", mode="before")
-    @classmethod
-    def validate_name(cls, value: object) -> str:
-        normalized = normalize_taxonomy_name(value)
-        if not normalized:
-            raise ValueError("name must not be empty")
-        return normalized
-
-    @model_validator(mode="after")
-    def validate_supporting_evidence(self) -> "StrengthFeature":
-        if not self.evidence:
-            raise ValueError("evidence must not be empty")
-        return self
-
-
-def normalize_feature_list(values: List[StrengthFeature]) -> List[StrengthFeature]:
-    return dedupe_by_normalized_key(
-        values,
-        key_selector=lambda item: item.name,
-    )
-
+from shared.profiling import (
+    Education,
+    Experience,
+    RoleTitles,
+    StrengthFeature,
+    normalize_feature_list,
+)
 
 class TechnicalExperience(BaseModel):
     model_config = ConfigDict(extra="forbid")

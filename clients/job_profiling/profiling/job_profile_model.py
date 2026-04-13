@@ -14,6 +14,13 @@ from shared.profiling import (
 )
 
 
+class TechnicalExperience(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    technical_core_features: ClassifiedTexts = Field(default_factory=ClassifiedTexts)
+    technologies: ClassifiedTexts = Field(default_factory=ClassifiedTexts)
+
+
 class VacancyProfile(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -21,8 +28,8 @@ class VacancyProfile(BaseModel):
     education: Education = Field(default_factory=Education)
     experience: Experience = Field(default_factory=Experience)
     languages: ClassifiedTexts = Field(default_factory=ClassifiedTexts)
-    technical_core_requirements: ClassifiedTexts = Field(
-        default_factory=ClassifiedTexts
+    technical_experience_requirements: TechnicalExperience = Field(
+        default_factory=TechnicalExperience
     )
     domain_or_industry_requirements: RequirementTexts = Field(
         default_factory=RequirementTexts
