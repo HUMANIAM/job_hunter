@@ -29,11 +29,15 @@ def _candidate_profile_payload() -> dict[str, object]:
     }
 
 
-def _vacancy_profile_payload(*, primary_role: str = "embedded software engineer") -> dict[str, object]:
+def _vacancy_profile_payload(
+    *,
+    primary_role: str = "embedded software engineer",
+    alternatives: list[str] | None = None,
+) -> dict[str, object]:
     return {
         "role_titles": {
             "primary": primary_role,
-            "alternatives": ["software engineer"],
+            "alternatives": alternatives or ["software engineer"],
             "confidence": 0.94,
             "evidence": ["Senior Embedded Software Engineer"],
         }
@@ -120,6 +124,7 @@ def test_run_eligibility_supports_single_vacancy_profile(
         / "Ibrahim_Saad_CV"
         / "eligible"
         / "sioux"
+        / "software"
         / vacancy_profile_path.name
     )
     assert evaluate_calls == [
@@ -178,7 +183,9 @@ def test_run_eligibility_for_input_path_supports_directory_output_dir(
         output_path=output_dir,
     )
 
-    candidate_output_dir = output_dir / "Ibrahim_Saad_CV" / "eligible" / "sioux"
+    candidate_output_dir = (
+        output_dir / "Ibrahim_Saad_CV" / "eligible" / "sioux" / "software"
+    )
     assert [result.vacancy_profile_path for result in results] == [
         first_vacancy_path,
         second_vacancy_path,
@@ -229,8 +236,63 @@ def test_run_eligibility_for_input_path_supports_n_limit(
 
     assert len(results) == 2
     assert len(
-        list((output_dir / "Ibrahim_Saad_CV" / "eligible" / "sioux").glob("*.json"))
+        list(
+            (
+                output_dir / "Ibrahim_Saad_CV" / "eligible" / "sioux" / "software"
+            ).glob("*.json")
+        )
     ) == 2
+
+
+def test_run_eligibility_writes_non_software_vacancy_under_non_software_folder(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    candidate_profile_path = tmp_path / "Ibrahim_Saad_CV.json"
+    candidate_profile_path.write_text(
+        json.dumps(_candidate_profile_payload()),
+        encoding="utf-8",
+    )
+    vacancy_profile_dir = tmp_path / "sioux" / "vacancy_profiles"
+    vacancy_profile_dir.mkdir(parents=True)
+    vacancy_profile_path = (
+        vacancy_profile_dir / "vacancy_electro_mechanical_designer.json"
+    )
+    vacancy_profile_path.write_text(
+        json.dumps(
+            _vacancy_profile_payload(
+                primary_role="electro-mechanical designer",
+                alternatives=["mechanical designer"],
+            )
+        ),
+        encoding="utf-8",
+    )
+    output_root = tmp_path / "eligibility"
+    monkeypatch.setattr(eligibility_cli, "log", lambda _message: None)
+    monkeypatch.setattr(
+        eligibility_cli,
+        "evaluate_eligibility",
+        lambda _candidate_profile, _vacancy_profile: _eligibility_response_payload(),
+    )
+
+    result = eligibility_cli.run_eligibility(
+        candidate_profile_path=candidate_profile_path,
+        vacancy_profile_path=vacancy_profile_path,
+        output_path=output_root,
+    )
+
+    expected_output_path = (
+        output_root
+        / "Ibrahim_Saad_CV"
+        / "eligible"
+        / "sioux"
+        / "non-software"
+        / vacancy_profile_path.name
+    )
+    assert result.output_path == expected_output_path
+    assert json.loads(expected_output_path.read_text(encoding="utf-8")) == (
+        _eligibility_response_payload().model_dump(mode="json")
+    )
 
 
 def test_run_eligibility_for_input_path_rejects_file_output_path(
