@@ -3,7 +3,7 @@ import sys
 import pytest
 from pydantic import ValidationError
 
-from clients.job_profiling.profiling.vacancy_profile_model import (
+from clients.job_profiling.profiling.job_profile_model import (
     Experience,
     Education,
     RoleTitles,
@@ -137,6 +137,21 @@ def test_vacancy_profile_requires_role_titles_supporting_fields() -> None:
                 }
             }
         )
+
+
+def test_vacancy_profile_defaults_empty_technical_experience_requirements() -> None:
+    profile = VacancyProfile.model_validate(
+        {
+            "role_titles": {
+                "primary": "mechatronics technician",
+                "confidence": 0.9,
+                "evidence": ["h1: Mechatronics Technician"],
+            }
+        }
+    )
+
+    assert profile.technical_experience_requirements.technical_core_features.required == []
+    assert profile.technical_experience_requirements.technologies.required == []
 
 
 def test_vacancy_profile_exports_only_public_profile_symbol() -> None:

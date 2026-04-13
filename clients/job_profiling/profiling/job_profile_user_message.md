@@ -76,19 +76,50 @@ Extract language requirements that are clearly supported by the source text.
 - Normalize values to lowercase.
 - Keep values distinct and deduplicated across both lists.
 
-### technical_core_requirements
+### technical_experience_requirements
 
-Extract the core technical requirements that are clearly supported by the source text.
+Extract the technical experience the vacancy clearly expects from the candidate.
 
-- `required` contains technical skills, technologies, or engineering capabilities the vacancy explicitly treats as required.
-- `preferred` contains technical skills, technologies, or engineering capabilities the vacancy explicitly treats as preferred, optional, or beneficial.
-- Extract only the core technical signals relevant to the role.
-- Only extract items that the posting presents as candidate-facing expectations, not just task context or project context.
-- Do not let one isolated tool, framework, or project mention redefine the role.
-- Do not convert general environment context into a hard requirement.
-- Do not convert a preference into a requirement.
+Shared rules for all subsections:
+
+- Return `required` and `preferred` lists.
+- `required` contains signals the vacancy explicitly treats as required, expected, must-have, or necessary.
+- `preferred` contains signals the vacancy explicitly treats as preferred, optional, nice-to-have, beneficial, or a plus.
+- Extract only candidate-facing expectations, not task context, project context, product context, or company environment.
+- Prefer extraction over summarization.
 - Normalize values to lowercase.
 - Keep values distinct and deduplicated across both lists.
+- Each item must represent one concept only.
+- Do not merge multiple concepts into one item.
+- Do not invent broader labels when the source supports a more exact term.
+- Keep concrete signals separate when they may matter independently later.
+- Do not let one isolated tool, framework, or project mention redefine the role.
+- Do not convert general environment context into a requirement.
+- Do not convert a preference into a requirement.
+
+
+#### technical_core_features
+
+Extract broad technical capability or experience areas the vacancy expects from the candidate.
+
+- Use this field for high-level technical capability areas only.
+- Good examples: `embedded software development`, `real-time systems`, `software architecture`, `design verification`, `mechanical testing and validation`, `prototyping`, `safety-critical software`.
+- Do not use this field for concrete programming languages, tools, frameworks, protocols, standards, or libraries.
+- Do not rewrite concrete technical signals into a broad category if they belong in `technologies`.
+- Do not populate this field with industry or product-domain context.
+
+#### technologies
+
+Extract concrete technologies the vacancy expects from the candidate.
+
+- This field includes programming languages, frameworks, libraries, tools, platforms, protocols, standards, databases, build systems, testing technologies, and infrastructure technologies.
+- Examples: `c`, `c++`, `python`, `qt`, `linux`, `embedded linux`, `freertos`, `zephyr`, `uart`, `spi`, `can`, `i2c`, `cmake`, `docker`, `pytest`, `googletest`, `vhdl`, `verilog`, `iec 61508`, `misra`, `3d cad tools`.
+- Keep exact supported terms where possible.
+- Keep each item as one concept only.
+- Do not merge multiple technologies into one item.
+- Do not rewrite concrete technologies into broad labels.
+- Do not populate this field with broad experience labels such as `real-time systems`, `software architecture`, or `design verification`; those belong in `technical_core_features`.
+
 
 ### domain_or_industry_requirements
 
