@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import clients.profiling as profiler_module
-from clients.profiling.vacancy_profile_model import VacancyProfile
+import clients.job_profiling.profiling.profiling as vacancy_profiler_module
+import clients.profiling.profiling as shared_profiler_module
+from clients.job_profiling.profiling.vacancy_profile_model import VacancyProfile
 
 
-def test_vacancy_profile_system_message_composes_common_rules() -> None:
-    system_message = profiler_module._load_system_message()
+def test_profile_extractor_system_message_composes_common_rules() -> None:
+    system_message = shared_profiler_module._load_system_message()
 
     assert "{{COMMON_EXTRACTION_RULES}}" not in system_message
     assert "Every extracted field must be supported by evidence" in system_message
@@ -16,15 +17,7 @@ def test_vacancy_profile_system_message_composes_common_rules() -> None:
     assert "Return JSON only." in system_message
 
 
-def test_vacancy_profile_user_message_includes_cleaned_text() -> None:
-    rendered = profiler_module._render_user_message("h1: Mechatronics Technician")
-
-    assert "{{SOURCE_TEXT}}" not in rendered
-    assert "h1: Mechatronics Technician" in rendered
-    assert "primary should be the single best professional role" in rendered
-
-
-def test_vacancy_profiler_returns_structured_profile() -> None:
+def test_extract_profile_returns_structured_profile() -> None:
     calls: list[dict[str, object]] = []
 
     class FakeCompletions:
@@ -60,14 +53,15 @@ def test_vacancy_profiler_returns_structured_profile() -> None:
             )
 
     fake_client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
-    profiler = profiler_module._VacancyProfiler(
+    profile = shared_profiler_module.extract_profile(
+        "h1: Mechatronics Technician",
+        profile_model=VacancyProfile,
+        profile_llm_user_message="rendered user message",
         client=fake_client,
         model="gpt-test",
         timeout_seconds=9.0,
         max_completion_tokens=321,
     )
-
-    profile = profiler.profile("h1: Mechatronics Technician")
 
     assert profile == VacancyProfile.model_validate(
         {
@@ -98,13 +92,11 @@ def test_vacancy_profiler_returns_structured_profile() -> None:
             "messages": [
                 {
                     "role": "system",
-                    "content": profiler_module._load_system_message(),
+                    "content": shared_profiler_module._load_system_message(),
                 },
                 {
                     "role": "user",
-                    "content": profiler_module._render_user_message(
-                        "h1: Mechatronics Technician"
-                    ),
+                    "content": "rendered user message",
                 },
             ],
             "timeout": 9.0,
@@ -112,10 +104,66 @@ def test_vacancy_profiler_returns_structured_profile() -> None:
     ]
 
 
-def test_vacancy_profiler_defaults_target_mini_model() -> None:
-    assert profiler_module._DEFAULT_VACANCY_PROFILE_LLM_MODEL == "gpt-5.4-mini"
-    assert profiler_module._DEFAULT_VACANCY_PROFILE_MAX_COMPLETION_TOKENS == 1200
+def test_profile_vacancy_text_delegates_to_shared_extractor(monkeypatch) -> None:
+    extracted_messages: list[dict[str, object]] = []
+    expected_profile = VacancyProfile.model_validate(
+        {
+            "role_titles": {
+                "primary": "mechatronics technician",
+                "alternatives": [],
+                "confidence": 0.96,
+                "evidence": ["h1: Mechatronics Technician"],
+            }
+        }
+    )
+
+    def fake_extract_profile(
+        source_text: str,
+        *,
+        profile_model: type[object],
+        profile_llm_user_message: str,
+    ) -> VacancyProfile:
+        extracted_messages.append(
+            {
+                "source_text": source_text,
+                "profile_model": profile_model,
+                "profile_llm_user_message": profile_llm_user_message,
+            }
+        )
+        return expected_profile
+
+    monkeypatch.setattr(
+        vacancy_profiler_module,
+        "extract_profile",
+        fake_extract_profile,
+    )
+
+    profile = vacancy_profiler_module.profile_vacancy_text(
+        "h1: Mechatronics Technician"
+    )
+
+    assert profile == expected_profile
+    assert extracted_messages == [
+        {
+            "source_text": "h1: Mechatronics Technician",
+            "profile_model": VacancyProfile,
+            "profile_llm_user_message": (
+                vacancy_profiler_module.render_job_profile_user_message(
+                    "h1: Mechatronics Technician"
+                )
+            ),
+        }
+    ]
+
+
+def test_profile_extractor_defaults_target_mini_model() -> None:
+    assert shared_profiler_module.DEFAULT_PROFILE_LLM_MODEL == "gpt-5.4-mini"
+    assert shared_profiler_module.DEFAULT_PROFILE_MAX_COMPLETION_TOKENS == 1200
+
+
+def test_profile_extractor_exports_only_external_entrypoint() -> None:
+    assert shared_profiler_module.__all__ == ["extract_profile"]
 
 
 def test_vacancy_profiler_exports_only_external_entrypoint() -> None:
-    assert profiler_module.__all__ == ["profile_vacancy_text"]
+    assert vacancy_profiler_module.__all__ == ["profile_vacancy_text"]
