@@ -1,21 +1,23 @@
 from __future__ import annotations
 
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Any, Sequence
 
 from infra.browser import capture_page_html, capture_page_title, open_page
-from reporting.writer import raw_html_filename
+
+
+@dataclass(frozen=True)
+class Page:
+    url: str
+    title: str | None
+    html_content: str
 
 
 def download_job_html_pages(
     browser: Any,
     job_links: Sequence[str],
-    destination_dir: Path | str,
-) -> list[Path]:
-    output_dir = Path(destination_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    output_paths: list[Path] = []
+) -> list[Page]:
+    pages: list[Page] = []
 
     with browser.new_context() as context:
         page = context.new_page()
@@ -25,9 +27,12 @@ def download_job_html_pages(
             if html_content is None:
                 raise RuntimeError(f"Failed to capture HTML for {link}")
 
-            page_title = capture_page_title(page)
-            output_path = output_dir / raw_html_filename(page_title, link)
-            output_path.write_text(html_content, encoding="utf-8")
-            output_paths.append(output_path)
+            pages.append(
+                Page(
+                    url=link,
+                    title=capture_page_title(page),
+                    html_content=html_content,
+                )
+            )
 
-    return output_paths
+    return pages

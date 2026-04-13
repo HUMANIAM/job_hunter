@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from pathlib import Path
+from types import SimpleNamespace
 from types import ModuleType
 import sys
 
@@ -18,6 +20,7 @@ if "playwright.sync_api" not in sys.modules:
     sys.modules["playwright.sync_api"] = sync_api
 
 from clients import clients_cli
+from reporting.writer import raw_html_filename
 
 
 class FakeAdapter:
@@ -77,7 +80,7 @@ def test_main_collects_links_and_prints_each_one(
     monkeypatch.setattr(
         clients_cli,
         "download_job_html_pages",
-        lambda browser, links, destination_dir: None,
+        lambda browser, links: [],
     )
 
     clients_cli.main(["sioux", "--job-limit", "2"])
@@ -93,10 +96,23 @@ def test_main_collects_links_and_prints_each_one(
 def test_main_downloads_html_when_flag_enabled(
     monkeypatch,
     capsys,
+    tmp_path: Path,
 ) -> None:
     fake_adapter = FakeAdapter()
     fake_browser = object()
-    download_calls: list[tuple[object, list[str], str]] = []
+    download_calls: list[tuple[object, list[str]]] = []
+    fake_pages = [
+        SimpleNamespace(
+            url="https://vacancy.sioux.eu/vacancies/one.html",
+            title="Senior Software Engineer",
+            html_content="<html>one</html>",
+        ),
+        SimpleNamespace(
+            url="https://vacancy.sioux.eu/vacancies/two.html",
+            title="Mechatronics Architect",
+            html_content="<html>two</html>",
+        ),
+    ]
 
     monkeypatch.setattr(clients_cli, "sync_playwright", lambda: _yield(object()))
     monkeypatch.setattr(
@@ -108,10 +124,9 @@ def test_main_downloads_html_when_flag_enabled(
     monkeypatch.setattr(
         clients_cli,
         "download_job_html_pages",
-        lambda browser, links, destination_dir: download_calls.append(
-            (browser, list(links), str(destination_dir))
-        ),
+        lambda browser, links: download_calls.append((browser, list(links))) or fake_pages,
     )
+    monkeypatch.chdir(tmp_path)
 
     clients_cli.main(["sioux", "--job-limit", "2", "--download"])
 
@@ -123,9 +138,15 @@ def test_main_downloads_html_when_flag_enabled(
                 "https://vacancy.sioux.eu/vacancies/one.html",
                 "https://vacancy.sioux.eu/vacancies/two.html",
             ],
-            "data/refactor/jobs/sioux/html",
         )
     ]
+    output_dir = tmp_path / "data" / "refactor" / "jobs" / "sioux" / "html"
+    assert (
+        output_dir / raw_html_filename("Senior Software Engineer", fake_pages[0].url)
+    ).read_text(encoding="utf-8") == "<html>one</html>"
+    assert (
+        output_dir / raw_html_filename("Mechatronics Architect", fake_pages[1].url)
+    ).read_text(encoding="utf-8") == "<html>two</html>"
     assert capsys.readouterr().out.splitlines() == [
         "================ retrieved links ===================",
         "https://vacancy.sioux.eu/vacancies/one.html",

@@ -17,8 +17,7 @@ if "playwright.sync_api" not in sys.modules:
     sys.modules["playwright"] = playwright
     sys.modules["playwright.sync_api"] = sync_api
 
-from clients.job_downloader import download_job_html_pages
-from reporting.writer import raw_html_filename
+from clients.job_downloader import Page, download_job_html_pages
 
 
 class FakePage:
@@ -66,9 +65,7 @@ class FakeBrowser:
         return self.context
 
 
-def test_download_job_html_pages_writes_html_using_raw_html_slug(
-    tmp_path: Path,
-) -> None:
+def test_download_job_html_pages_returns_captured_pages() -> None:
     first_url = "https://vacancy.sioux.eu/vacancies/one.html"
     second_url = "https://vacancy.sioux.eu/vacancies/two.html"
     browser = FakeBrowser(
@@ -82,16 +79,21 @@ def test_download_job_html_pages_writes_html_using_raw_html_slug(
         },
     )
 
-    output_paths = download_job_html_pages(
+    pages = download_job_html_pages(
         browser,
         [first_url, second_url],
-        tmp_path,
     )
 
-    assert output_paths == [
-        tmp_path / raw_html_filename("Senior Software Engineer", first_url),
-        tmp_path / raw_html_filename("Mechatronics Architect", second_url),
+    assert pages == [
+        Page(
+            url=first_url,
+            title="Senior Software Engineer",
+            html_content="<html>one</html>",
+        ),
+        Page(
+            url=second_url,
+            title="Mechatronics Architect",
+            html_content="<html>two</html>",
+        ),
     ]
-    assert output_paths[0].read_text(encoding="utf-8") == "<html>one</html>"
-    assert output_paths[1].read_text(encoding="utf-8") == "<html>two</html>"
     assert browser.context.closed is True
