@@ -13,6 +13,9 @@ Important:
 - preserve source order
 - copy text closely from the source
 - keep only visible vacancy text that a human candidate can directly see on the page
+- every `text` value must stay on a single line
+- replace any internal line breaks, tabs, or repeated whitespace with single spaces
+- the final rendered text will be one line per item as `html_tag: text`
 - do not summarize
 - do not interpret
 - do not classify into profile fields

@@ -55,6 +55,9 @@ Rules:
 - copy text as close to the source as possible
 - preserve source order
 - one kept item per array item
+- every `text` value must be exactly one line
+- replace any internal line breaks, tabs, or repeated whitespace inside `text` with single spaces
+- the rendered artifact will be one line per item in the form `html_tag: text`
 - do not invent tags
 - do not rename tags into semantic labels
 - do not include fields outside the schema

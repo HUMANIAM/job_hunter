@@ -24,11 +24,9 @@ class CleanedJobHtmlLine(BaseModel):
     @field_validator("text")
     @classmethod
     def validate_text(cls, value: str) -> str:
-        normalized = value.strip()
+        normalized = re.sub(r"\s+", " ", value).strip()
         if not normalized:
             raise ValueError("text is empty")
-        if "\n" in normalized:
-            raise ValueError("text must be a single line")
         return normalized
 
 

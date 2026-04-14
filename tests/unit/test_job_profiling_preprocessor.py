@@ -19,6 +19,8 @@ def test_job_html_signal_cleaner_system_message_requires_structured_json() -> No
     assert "configured response schema" in system_message
     assert "do not output JSON" not in system_message
     assert "- `html_tag`: the original HTML tag name from the visible source" in system_message
+    assert "every `text` value must be exactly one line" in system_message
+    assert "the rendered artifact will be one line per item in the form `html_tag: text`" in system_message
     assert "Do not copy JSON-LD, meta tags, title tags, or other document metadata" in system_message
     assert "source_kind" not in system_message
 
@@ -30,6 +32,8 @@ def test_job_html_signal_cleaner_user_message_includes_raw_html() -> None:
     assert "<h1>Mechatronics Technician</h1>" in rendered
     assert "Return exactly one JSON object." in rendered
     assert "Each line item must include `html_tag` and `text`." in rendered
+    assert "every `text` value must stay on a single line" in rendered
+    assert "the final rendered text will be one line per item as `html_tag: text`" in rendered
     assert "source_kind" not in rendered
 
 
