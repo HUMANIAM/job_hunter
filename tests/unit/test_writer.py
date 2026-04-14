@@ -68,6 +68,21 @@ def test_job_profile_filename_uses_slug_and_url_hash() -> None:
     assert filename.endswith(".json")
 
 
+def test_raw_html_filename_uses_html_metadata_when_title_is_missing() -> None:
+    filename = output_writer.raw_html_filename(
+        None,
+        "https://example.com/jobs/software-development-engineer",
+        html_content=(
+            "<html><head>"
+            '<meta property="og:title" content="Software Development Engineer - AI"/>'
+            "</head><body></body></html>"
+        ),
+    )
+
+    assert filename.startswith("software_development_engineer_ai__")
+    assert filename.endswith(".html")
+
+
 def test_ranking_result_filename_uses_candidate_and_job_ids() -> None:
     filename = output_writer.ranking_result_filename(
         "Ibrahim_Saad_CV",

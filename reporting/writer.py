@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import html
+from html.parser import HTMLParser
 import re
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import unquote, urlparse
 
 from infra import json_io
 
@@ -70,6 +73,112 @@ def slugify_job_title(title: str | None) -> str:
     return normalized or "job"
 
 
+class _JobHtmlTitleParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.meta_title: str | None = None
+        self.og_title: str | None = None
+        self.document_title: str | None = None
+        self.first_h1: str | None = None
+        self.canonical_url: str | None = None
+        self._capture_title = False
+        self._capture_h1 = False
+        self._title_chunks: list[str] = []
+        self._h1_chunks: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attrs_dict = {key.casefold(): (value or "") for key, value in attrs}
+        normalized_tag = tag.casefold()
+
+        if normalized_tag == "meta":
+            meta_name = attrs_dict.get("name", "").casefold()
+            meta_property = attrs_dict.get("property", "").casefold()
+            content = attrs_dict.get("content", "").strip()
+            if content:
+                if meta_property == "og:title" and self.og_title is None:
+                    self.og_title = content
+                if meta_name == "title" and self.meta_title is None:
+                    self.meta_title = content
+        elif normalized_tag == "link":
+            rel = attrs_dict.get("rel", "").casefold()
+            href = attrs_dict.get("href", "").strip()
+            if "canonical" in rel and href and self.canonical_url is None:
+                self.canonical_url = href
+        elif normalized_tag == "title":
+            self._capture_title = True
+            self._title_chunks = []
+        elif normalized_tag == "h1" and self.first_h1 is None:
+            self._capture_h1 = True
+            self._h1_chunks = []
+
+    def handle_endtag(self, tag: str) -> None:
+        normalized_tag = tag.casefold()
+        if normalized_tag == "title" and self._capture_title:
+            self._capture_title = False
+            title_text = "".join(self._title_chunks).strip()
+            if title_text and self.document_title is None:
+                self.document_title = title_text
+        elif normalized_tag == "h1" and self._capture_h1:
+            self._capture_h1 = False
+            h1_text = "".join(self._h1_chunks).strip()
+            if h1_text and self.first_h1 is None:
+                self.first_h1 = h1_text
+
+    def handle_data(self, data: str) -> None:
+        if self._capture_title:
+            self._title_chunks.append(data)
+        if self._capture_h1:
+            self._h1_chunks.append(data)
+
+
+def _normalized_non_empty_text(value: str | None) -> str | None:
+    normalized = re.sub(r"\s+", " ", html.unescape(value or "")).strip()
+    return normalized or None
+
+
+def _title_from_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    parsed_url = urlparse(url)
+    path_segments = [segment for segment in parsed_url.path.split("/") if segment]
+    if not path_segments:
+        return None
+
+    candidate = unquote(path_segments[-1])
+    if "_" in candidate:
+        candidate = candidate.split("_", 1)[0]
+    candidate = re.sub(r"[-_]+", " ", candidate)
+    candidate = re.sub(r"\s+", " ", candidate).strip()
+    return candidate or None
+
+
+def best_job_title(
+    title: str | None,
+    *,
+    url: str | None = None,
+    html_content: str | None = None,
+) -> str | None:
+    normalized_title = _normalized_non_empty_text(title)
+    if normalized_title:
+        return normalized_title
+
+    if html_content:
+        parser = _JobHtmlTitleParser()
+        parser.feed(html_content)
+        for candidate in (
+            parser.og_title,
+            parser.meta_title,
+            parser.document_title,
+            parser.first_h1,
+            _title_from_url(parser.canonical_url),
+        ):
+            normalized_candidate = _normalized_non_empty_text(candidate)
+            if normalized_candidate:
+                return normalized_candidate
+
+    return _title_from_url(url)
+
+
 def job_profile_filename(title: str | None, url: str | None) -> str:
     stem = slugify_job_title(title)
     if not url:
@@ -79,8 +188,16 @@ def job_profile_filename(title: str | None, url: str | None) -> str:
     return f"{stem}__{url_hash}.json"
 
 
-def raw_html_filename(title: str | None, url: str | None) -> str:
-    return job_profile_filename(title, url).replace(".json", ".html")
+def raw_html_filename(
+    title: str | None,
+    url: str | None,
+    *,
+    html_content: str | None = None,
+) -> str:
+    return job_profile_filename(
+        best_job_title(title, url=url, html_content=html_content),
+        url,
+    ).replace(".json", ".html")
 
 
 def job_profile_output_path_for(
