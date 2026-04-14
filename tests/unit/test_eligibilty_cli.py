@@ -320,3 +320,71 @@ def test_run_eligibility_for_input_path_rejects_file_output_path(
             vacancy_profile_input_path=vacancy_dir,
             output_path=output_path,
         )
+
+
+def test_run_eligibility_for_input_path_skips_existing_outputs(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    candidate_profile_path = tmp_path / "Ibrahim_Saad_CV.json"
+    candidate_profile_path.write_text(
+        json.dumps(_candidate_profile_payload()),
+        encoding="utf-8",
+    )
+    vacancy_dir = tmp_path / "sioux" / "vacancy_profiles"
+    vacancy_dir.mkdir(parents=True)
+    first_vacancy_path = vacancy_dir / "a.json"
+    second_vacancy_path = vacancy_dir / "b.json"
+    first_vacancy_path.write_text(
+        json.dumps(_vacancy_profile_payload(primary_role="embedded software engineer")),
+        encoding="utf-8",
+    )
+    second_vacancy_path.write_text(
+        json.dumps(_vacancy_profile_payload(primary_role="firmware engineer")),
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "eligibility"
+    existing_output_path = (
+        output_dir
+        / "Ibrahim_Saad_CV"
+        / "eligible"
+        / "sioux"
+        / "software"
+        / "a.json"
+    )
+    existing_output_path.parent.mkdir(parents=True, exist_ok=True)
+    existing_output_path.write_text(
+        json.dumps(_eligibility_response_payload().model_dump(mode="json")),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(eligibility_cli, "log", lambda _message: None)
+    evaluate_calls: list[str] = []
+
+    def fake_evaluate_eligibility(candidate_profile, vacancy_profile) -> FakeEligibilityResponse:
+        evaluate_calls.append(
+            f"{candidate_profile.role_titles.primary}->{vacancy_profile.role_titles.primary}"
+        )
+        return _eligibility_response_payload()
+
+    monkeypatch.setattr(
+        eligibility_cli,
+        "evaluate_eligibility",
+        fake_evaluate_eligibility,
+    )
+
+    results = eligibility_cli.run_eligibility_for_input_path(
+        candidate_profile_path=candidate_profile_path,
+        vacancy_profile_input_path=vacancy_dir,
+        output_path=output_dir,
+    )
+
+    assert [result.vacancy_profile_path for result in results] == [second_vacancy_path]
+    assert evaluate_calls == [
+        "embedded software engineer->firmware engineer",
+    ]
+    assert existing_output_path.exists()
+    assert (
+        output_dir / "Ibrahim_Saad_CV" / "eligible" / "sioux" / "software" / "b.json"
+    ).exists()

@@ -40,7 +40,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Evaluate a candidate profile against a vacancy profile file or directory "
-            "of vacancy profiles."
+            "of vacancy profiles. Existing eligibility outputs are skipped "
+            "automatically."
         )
     )
     parser.add_argument(
@@ -73,7 +74,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "-n",
         type=positive_int_arg("-n"),
-        help="Maximum number of vacancy profile files to process from a directory input.",
+        help=(
+            "Maximum number of pending vacancy profile files to process from a "
+            "file or directory input."
+        ),
     )
     args = parser.parse_args(list(argv) if argv is not None else None)
     if args.candidate_profile_path is None:
@@ -210,6 +214,43 @@ def _company_name_for(vacancy_profile_path: Path) -> str:
     return vacancy_profile_path.parent.name
 
 
+def _existing_output_keys_for_candidate(
+    *,
+    candidate_profile_path: Path,
+    output_root: Path,
+) -> set[tuple[str, str]]:
+    candidate_root = output_root / candidate_profile_path.stem
+    if not candidate_root.exists():
+        return set()
+    return {
+        (output_path.parent.parent.name, output_path.name)
+        for output_path in candidate_root.rglob("*.json")
+        if output_path.is_file()
+    }
+
+
+def _pending_vacancy_profile_paths(
+    vacancy_profile_paths: Sequence[Path],
+    *,
+    candidate_profile_path: Path,
+    output_root: Path,
+    input_limit: int | None = None,
+) -> list[Path]:
+    existing_output_keys = _existing_output_keys_for_candidate(
+        candidate_profile_path=candidate_profile_path,
+        output_root=output_root,
+    )
+    pending_paths = [
+        vacancy_profile_path
+        for vacancy_profile_path in vacancy_profile_paths
+        if (_company_name_for(vacancy_profile_path), vacancy_profile_path.name)
+        not in existing_output_keys
+    ]
+    if input_limit is not None:
+        return pending_paths[:input_limit]
+    return pending_paths
+
+
 def _role_classification_for(vacancy_profile: VacancyProfile) -> str:
     titles = [
         vacancy_profile.role_titles.primary,
@@ -304,10 +345,18 @@ def run_eligibility_for_input_path(
     )
     resolved_vacancy_profile_paths = _resolve_vacancy_profile_input_paths(
         vacancy_profile_input_path,
+        input_limit=None,
+    )
+    output_root = _resolve_output_root(output_path)
+    pending_vacancy_profile_paths = _pending_vacancy_profile_paths(
+        resolved_vacancy_profile_paths,
+        candidate_profile_path=resolved_candidate_profile_path,
+        output_root=output_root,
         input_limit=input_limit,
     )
+    if not pending_vacancy_profile_paths:
+        return []
     candidate_profile = _load_candidate_profile(resolved_candidate_profile_path)
-    output_root = _resolve_output_root(output_path)
     return [
         _run_loaded_eligibility(
             candidate_profile_path=resolved_candidate_profile_path,
@@ -315,7 +364,7 @@ def run_eligibility_for_input_path(
             vacancy_profile_path=resolved_vacancy_profile_path,
             output_root=output_root,
         )
-        for resolved_vacancy_profile_path in resolved_vacancy_profile_paths
+        for resolved_vacancy_profile_path in pending_vacancy_profile_paths
     ]
 
 

@@ -51,8 +51,10 @@ def _parse_pipeline(value: str) -> list[str]:
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run the job profiling pipeline for raw HTML or preprocessed "
-        "vacancy text."
+        description=(
+            "Run the job profiling pipeline for raw HTML or preprocessed "
+            "vacancy text. Existing stage outputs are skipped automatically."
+        )
     )
     parser.add_argument(
         "input_path",
@@ -89,7 +91,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "-n",
         type=positive_int_arg("-n"),
-        help="Maximum number of jobs to process from a directory input.",
+        help=(
+            "Maximum number of pending jobs to process from a file or directory input."
+        ),
     )
     args = parser.parse_args(list(argv) if argv is not None else None)
     args.pipeline = _parse_pipeline(args.pipeline)
@@ -199,6 +203,47 @@ def _vacancy_profile_output_path_for(
     return vacancy_profile_output_dir / f"{html_path.stem}.json"
 
 
+def _final_output_path_for(
+    input_path: Path,
+    *,
+    pipeline: Sequence[str],
+    preprocessing_output_dir: Path,
+    vacancy_profile_output_dir: Path,
+) -> Path:
+    if list(pipeline)[-1] == "pre":
+        return _preprocessing_output_path_for(
+            input_path,
+            preprocessing_output_dir,
+        )
+    return _vacancy_profile_output_path_for(
+        input_path,
+        vacancy_profile_output_dir,
+    )
+
+
+def _pending_input_paths(
+    input_paths: Sequence[Path],
+    *,
+    pipeline: Sequence[str],
+    preprocessing_output_dir: Path,
+    vacancy_profile_output_dir: Path,
+    input_limit: int | None = None,
+) -> list[Path]:
+    pending_paths = [
+        input_path
+        for input_path in input_paths
+        if not _final_output_path_for(
+            input_path,
+            pipeline=pipeline,
+            preprocessing_output_dir=preprocessing_output_dir,
+            vacancy_profile_output_dir=vacancy_profile_output_dir,
+        ).exists()
+    ]
+    if input_limit is not None:
+        return pending_paths[:input_limit]
+    return pending_paths
+
+
 def _load_cleaned_vacancy_text(
     html_path: Path,
     preprocessing_output_dir: Path,
@@ -306,10 +351,17 @@ def run_job_profiling_for_input_path(
     resolved_input_paths = _resolve_input_paths(
         input_path,
         pipeline=pipeline,
+        input_limit=None,
+    )
+    pending_input_paths = _pending_input_paths(
+        resolved_input_paths,
+        pipeline=pipeline,
+        preprocessing_output_dir=preprocessing_output_dir,
+        vacancy_profile_output_dir=vacancy_profile_output_dir,
         input_limit=input_limit,
     )
     results: list[JobProfilingResult] = []
-    for resolved_input_path in resolved_input_paths:
+    for resolved_input_path in pending_input_paths:
         if resolved_input_path.suffix.lower() == ".txt":
             results.append(
                 run_vacancy_profile_extraction(
