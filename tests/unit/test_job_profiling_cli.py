@@ -253,3 +253,97 @@ def test_run_job_profiling_for_input_path_supports_ext_txt_directory(
     assert json.loads((vacancy_profiles_dir / "b_vacancy.json").read_text(encoding="utf-8")) == (
         _vacancy_profile_payload().model_dump(mode="json")
     )
+
+
+def test_run_job_profiling_for_input_path_skips_existing_pre_outputs(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    html_dir = tmp_path / "html"
+    html_dir.mkdir()
+    first_html_path = html_dir / "a_vacancy.html"
+    second_html_path = html_dir / "b_vacancy.html"
+    first_html_path.write_text("<h1>First Vacancy</h1>", encoding="utf-8")
+    second_html_path.write_text("<h1>Second Vacancy</h1>", encoding="utf-8")
+
+    preprocessing_dir = tmp_path / "preprocessing"
+    preprocessing_dir.mkdir()
+    existing_output_path = preprocessing_dir / "a_vacancy.txt"
+    existing_output_path.write_text("Already done", encoding="utf-8")
+
+    monkeypatch.setattr(job_profiling_cli, "log", lambda _message: None)
+    processed_html: list[str] = []
+
+    def fake_preprocess_job_html(raw_html: str) -> str:
+        processed_html.append(raw_html)
+        return raw_html.replace("<h1>", "").replace("</h1>", "").strip()
+
+    monkeypatch.setattr(
+        job_profiling_cli,
+        "preprocess_job_html",
+        fake_preprocess_job_html,
+    )
+
+    results = job_profiling_cli.run_job_profiling_for_input_path(
+        input_path=html_dir,
+        pipeline=["pre"],
+        preprocessing_output_dir=preprocessing_dir,
+    )
+
+    assert [result.input_path for result in results] == [second_html_path]
+    assert processed_html == ["<h1>Second Vacancy</h1>"]
+    assert existing_output_path.read_text(encoding="utf-8") == "Already done"
+    assert (preprocessing_dir / "b_vacancy.txt").read_text(encoding="utf-8") == (
+        "Second Vacancy"
+    )
+
+
+def test_run_job_profiling_for_input_path_skips_existing_ext_outputs_for_pre_ext(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    html_dir = tmp_path / "html"
+    html_dir.mkdir()
+    first_html_path = html_dir / "a_vacancy.html"
+    second_html_path = html_dir / "b_vacancy.html"
+    first_html_path.write_text("<h1>First Vacancy</h1>", encoding="utf-8")
+    second_html_path.write_text("<h1>Second Vacancy</h1>", encoding="utf-8")
+
+    preprocessing_dir = tmp_path / "preprocessing"
+    vacancy_profiles_dir = tmp_path / "vacancy_profiles"
+    vacancy_profiles_dir.mkdir()
+    existing_output_path = vacancy_profiles_dir / "a_vacancy.json"
+    existing_output_path.write_text(
+        json.dumps(_vacancy_profile_payload().model_dump(mode="json")),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(job_profiling_cli, "log", lambda _message: None)
+    processed_cleaned_texts: list[str] = []
+    monkeypatch.setattr(
+        job_profiling_cli,
+        "preprocess_job_html",
+        lambda raw_html: raw_html.replace("<h1>", "").replace("</h1>", "").strip(),
+    )
+
+    def fake_profile_vacancy_text(cleaned_text: str) -> FakeVacancyProfile:
+        processed_cleaned_texts.append(cleaned_text)
+        return _vacancy_profile_payload()
+
+    monkeypatch.setattr(
+        job_profiling_cli,
+        "profile_vacancy_text",
+        fake_profile_vacancy_text,
+    )
+
+    results = job_profiling_cli.run_job_profiling_for_input_path(
+        input_path=html_dir,
+        pipeline=["pre", "ext"],
+        preprocessing_output_dir=preprocessing_dir,
+        vacancy_profile_output_dir=vacancy_profiles_dir,
+    )
+
+    assert [result.input_path for result in results] == [second_html_path]
+    assert processed_cleaned_texts == ["Second Vacancy"]
+    assert existing_output_path.exists()
+    assert (vacancy_profiles_dir / "b_vacancy.json").exists()
