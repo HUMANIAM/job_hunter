@@ -5,11 +5,13 @@ from typing import Type
 from clients.base import BaseClientAdapter
 from clients.clients import Client
 from clients.sources.asml.adapter import AsmlClientAdapter
+from clients.sources.daf.adapter import DafClientAdapter
 from clients.sources.sioux.adapter import SiouxClientAdapter
 
 
 _CLIENT_ADAPTERS: dict[Client, Type[BaseClientAdapter]] = {
     Client.ASML: AsmlClientAdapter,
+    Client.DAF: DafClientAdapter,
     Client.SIOUX: SiouxClientAdapter,
 }
 

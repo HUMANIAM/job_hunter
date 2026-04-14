@@ -21,6 +21,7 @@ if "playwright.sync_api" not in sys.modules:
 from clients.clients import Client
 from clients.registry import get_client_adapter
 from clients.sources.asml.adapter import AsmlClientAdapter
+from clients.sources.daf.adapter import DafClientAdapter
 from clients.sources.sioux.adapter import SiouxClientAdapter
 
 
@@ -34,6 +35,12 @@ def test_get_client_adapter_returns_registered_sioux_adapter() -> None:
     adapter = get_client_adapter(Client.SIOUX)
 
     assert isinstance(adapter, SiouxClientAdapter)
+
+
+def test_get_client_adapter_returns_registered_daf_adapter() -> None:
+    adapter = get_client_adapter(Client.DAF)
+
+    assert isinstance(adapter, DafClientAdapter)
 
 
 def test_get_client_adapter_raises_clear_error_for_unknown_client() -> None:
