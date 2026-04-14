@@ -5,6 +5,9 @@ class Client(str, Enum):
     SIOUX = "sioux"
     ASML = "asml"
     DAF = "daf"
+    PHILIPS = "philips"
+    CANON = "canon"
+    VANDERLANDE = "vanderlande"
 
 
 def parse_client(value: str) -> Client:
