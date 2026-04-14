@@ -1,6 +1,6 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Any, List
+from typing import Any, List, Tuple
 
 
 class BaseClientAdapter(ABC):
@@ -13,3 +13,13 @@ class BaseClientAdapter(ABC):
     ) -> List[str]:
         """Return job detail links for this client."""
         raise NotImplementedError
+
+    def transform_downloaded_html(
+        self,
+        *,
+        url: str,
+        title: str | None,
+        html_content: str,
+    ) -> Tuple[str | None, str]:
+        """Allow client adapters to normalize downloaded HTML before persistence."""
+        return title, html_content

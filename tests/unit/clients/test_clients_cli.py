@@ -26,6 +26,7 @@ from reporting.writer import raw_html_filename
 class FakeAdapter:
     def __init__(self) -> None:
         self.calls: list[tuple[object, int | None]] = []
+        self.transform_calls: list[tuple[str, str | None, str]] = []
 
     def collect_job_links(
         self,
@@ -38,6 +39,16 @@ class FakeAdapter:
             "https://vacancy.sioux.eu/vacancies/one.html",
             "https://vacancy.sioux.eu/vacancies/two.html",
         ]
+
+    def transform_downloaded_html(
+        self,
+        *,
+        url: str,
+        title: str | None,
+        html_content: str,
+    ) -> tuple[str | None, str]:
+        self.transform_calls.append((url, title, html_content))
+        return title, html_content
 
 
 def _yield(value: object):
@@ -80,7 +91,7 @@ def test_main_collects_links_and_prints_each_one(
     monkeypatch.setattr(
         clients_cli,
         "download_job_html_pages",
-        lambda browser, links: [],
+        lambda browser, links, *, adapter=None: [],
     )
 
     clients_cli.main(["sioux", "--job-limit", "2"])
@@ -124,8 +135,11 @@ def test_main_downloads_html_from_urls_file_when_flag_enabled(
     monkeypatch.setattr(
         clients_cli,
         "download_job_html_pages",
-        lambda browser, links: download_calls.append((browser, list(links))) or fake_pages,
+        lambda browser, links, *, adapter=None: download_calls.append(
+            (browser, list(links), adapter)
+        ) or fake_pages,
     )
+    monkeypatch.setattr(clients_cli, "get_client_adapter", lambda client: fake_adapter)
     monkeypatch.chdir(tmp_path)
     urls_path = tmp_path / "data" / "refactor" / "jobs" / "sioux" / "urls.md"
     urls_path.parent.mkdir(parents=True, exist_ok=True)
@@ -150,6 +164,7 @@ def test_main_downloads_html_from_urls_file_when_flag_enabled(
                 "https://vacancy.sioux.eu/vacancies/one.html",
                 "https://vacancy.sioux.eu/vacancies/two.html",
             ],
+            fake_adapter,
         )
     ]
     output_dir = tmp_path / "data" / "refactor" / "jobs" / "sioux" / "html"
@@ -193,8 +208,9 @@ def test_main_downloads_html_using_metadata_title_when_page_title_is_missing(
     monkeypatch.setattr(
         clients_cli,
         "download_job_html_pages",
-        lambda browser, links: fake_pages,
+        lambda browser, links, *, adapter=None: fake_pages,
     )
+    monkeypatch.setattr(clients_cli, "get_client_adapter", lambda client: FakeAdapter())
     monkeypatch.chdir(tmp_path)
     urls_path = tmp_path / "data" / "refactor" / "jobs" / "sioux" / "urls.md"
     urls_path.parent.mkdir(parents=True, exist_ok=True)
@@ -222,6 +238,7 @@ def test_main_download_raises_when_urls_file_is_missing(
         "launched_chromium",
         lambda playwright, *, headless=True: _yield(fake_browser),
     )
+    monkeypatch.setattr(clients_cli, "get_client_adapter", lambda client: FakeAdapter())
     monkeypatch.chdir(tmp_path)
 
     try:
