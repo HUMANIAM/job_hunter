@@ -4,6 +4,7 @@ from enum import Enum
 class Client(str, Enum):
     SIOUX = "sioux"
     ASML = "asml"
+    DAF = "daf"
 
 
 def parse_client(value: str) -> Client:
