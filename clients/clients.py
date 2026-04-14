@@ -3,6 +3,7 @@ from enum import Enum
 
 class Client(str, Enum):
     SIOUX = "sioux"
+    ASML = "asml"
 
 
 def parse_client(value: str) -> Client:
