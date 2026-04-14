@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -19,6 +20,7 @@ DEFAULT_JOBS_ROOT = Path("data/refactor/jobs")
 DEFAULT_ELIGIBILITY_ROOT = Path("data/refactor/eligibility")
 DEFAULT_MAX_RATE_LIMIT_RETRIES = 6
 DEFAULT_INITIAL_RETRY_DELAY_SECONDS = 5.0
+DEFAULT_MAX_WORKERS = os.cpu_count() or 1
 _HTML_SUFFIX = ".html"
 _RATE_LIMIT_MARKERS = (
     "RateLimitError",
@@ -85,7 +87,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--max-workers",
         type=int,
-        help="Maximum number of companies to run in parallel. Defaults to company count.",
+        help=(
+            "Maximum number of companies to run in parallel. "
+            f"Defaults to system thread count ({DEFAULT_MAX_WORKERS})."
+        ),
     )
     parser.add_argument(
         "--max-rate-limit-retries",
@@ -348,7 +353,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
 
     results: list[CompanyRunResult] = []
-    max_workers = args.max_workers or len(args.companies)
+    max_workers = args.max_workers or DEFAULT_MAX_WORKERS
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
             executor.submit(
