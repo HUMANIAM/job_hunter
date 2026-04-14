@@ -15,9 +15,8 @@ ASML_ENTRY_URL = (
     "?job_country=Netherlands&job_type=Fix"
 )
 
-# Tighten these once you inspect the real DOM.
 ASML_RESULTS_READY_SELECTORS = [
-    "a[href*='/job/']",
+    "a[href*='/careers/find-your-job/']",
     "a[href*='myworkdayjobs.com']",
 ]
 
@@ -25,9 +24,8 @@ ASML_COOKIE_ACCEPT_SELECTORS = [
     "#onetrust-accept-btn-handler",
 ]
 
-# Keep this permissive first, then tighten after one inspection pass.
 ASML_JOB_URL_RE = re.compile(
-    r"^https://[^/]+(?:/[^/]+)*/job/[^?#]+$"
+    r"^https://www\.asml\.com/en/careers/find-your-job/[^/?#]+$"
 )
 
 # Optional fallback if ASML links directly to Workday-hosted jobs.
@@ -98,6 +96,7 @@ class AsmlClientAdapter(BaseClientAdapter):
 
     def _get_next_page_url(self, page: Any) -> str | None:
         next_selectors = [
+            "button[aria-label='next']",
             "a[aria-label='Next']",
             "a[rel='next']",
             "a.pagination__next",
@@ -126,6 +125,7 @@ class AsmlClientAdapter(BaseClientAdapter):
 
     def _click_next_page(self, page: Any) -> bool:
         next_selectors = [
+            "button[aria-label='next']",
             "button[aria-label='Next']",
             "a[aria-label='Next']",
             "a.pagination__next",
