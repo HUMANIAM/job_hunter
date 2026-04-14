@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Sequence
 
+from clients.base import BaseClientAdapter
 from infra.browser import capture_page_html, capture_page_title, open_page
 
 
@@ -16,6 +17,8 @@ class Page:
 def download_job_html_pages(
     browser: Any,
     job_links: Sequence[str],
+    *,
+    adapter: BaseClientAdapter | None = None,
 ) -> list[Page]:
     pages: list[Page] = []
 
@@ -26,11 +29,19 @@ def download_job_html_pages(
             html_content = capture_page_html(page)
             if html_content is None:
                 raise RuntimeError(f"Failed to capture HTML for {link}")
+            title = capture_page_title(page)
+
+            if adapter is not None:
+                title, html_content = adapter.transform_downloaded_html(
+                    url=link,
+                    title=title,
+                    html_content=html_content,
+                )
 
             pages.append(
                 Page(
                     url=link,
-                    title=capture_page_title(page),
+                    title=title,
                     html_content=html_content,
                 )
             )

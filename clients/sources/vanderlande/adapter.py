@@ -6,13 +6,16 @@ from typing import Any, List
 from urllib.parse import urljoin
 
 from clients.base import BaseClientAdapter
+from clients.sources.vanderlande.job_html import render_vanderlande_job_html
 from infra.browser import open_and_prepare_page
 from infra.logging import log
 
 
+# NL + Regular contract
 VANDERLANDE_ENTRY_URL = (
-    "https://vanderlande.wd3.myworkdayjobs.com/nl-NL/careers"
+    "https://vanderlande.wd3.myworkdayjobs.com/en-US/careers"
     "?locationCountry=9696868b09c64d52a62ee13b052383cc"
+    "&workerSubType=65d289099a0c104a3602035a812e138b"
 )
 
 VANDERLANDE_RESULTS_READY_SELECTORS = [
@@ -21,7 +24,7 @@ VANDERLANDE_RESULTS_READY_SELECTORS = [
 ]
 
 VANDERLANDE_JOB_URL_RE = re.compile(
-    r"^https://vanderlande\.wd3\.myworkdayjobs\.com/nl-NL/careers/job/[^?#]+$"
+    r"^https://vanderlande\.wd3\.myworkdayjobs\.com/en-US/careers/job/[^?#]+$"
 )
 
 
@@ -36,6 +39,20 @@ class VanderlandeClientAdapter(BaseClientAdapter):
     ) -> List[str]:
         limit = sys.maxsize if job_limit is None else job_limit
         return self._collect_job_links_via_listing(browser, job_limit=limit)
+
+    def transform_downloaded_html(
+        self,
+        *,
+        url: str,
+        title: str | None,
+        html_content: str,
+    ) -> tuple[str | None, str]:
+        rendered = render_vanderlande_job_html(html_content)
+        if rendered is None:
+            return title, html_content
+
+        transformed_title, transformed_html = rendered
+        return transformed_title or title, transformed_html
 
     def _open_page(self, page: Any, url: str) -> None:
         open_and_prepare_page(

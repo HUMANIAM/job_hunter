@@ -87,6 +87,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         raise SystemExit(str(exc)) from exc
 
     urls_path = Path(args.urls_path) if args.urls_path else _default_urls_path(client)
+    try:
+        adapter = get_client_adapter(client)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
 
     if args.download:
         links = _read_links_file(urls_path)
@@ -98,6 +102,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 pages = download_job_html_pages(
                     browser,
                     links,
+                    adapter=adapter,
                 )
                 output_dir = Path("data/refactor/jobs") / client.value / "html"
                 output_dir.mkdir(parents=True, exist_ok=True)
@@ -109,11 +114,6 @@ def main(argv: Sequence[str] | None = None) -> None:
                     )
                     output_path.write_text(page.html_content, encoding="utf-8")
     else:
-        try:
-            adapter = get_client_adapter(client)
-        except ValueError as exc:
-            raise SystemExit(str(exc)) from exc
-
         with sync_playwright() as playwright:
             with launched_chromium(playwright, headless=True) as browser:
                 links = adapter.collect_job_links(browser, job_limit=args.job_limit)
