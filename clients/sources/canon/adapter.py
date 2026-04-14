@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import sys
 from typing import Any, List
-from urllib.parse import urljoin
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 from clients.base import BaseClientAdapter
 from infra.browser import open_and_prepare_page
@@ -12,12 +12,16 @@ from infra.logging import log
 
 CANON_ENTRY_URL = (
     "https://jobs.cpp.canon/search/"
-    "?locale=en_GB&optionsFacetsDD_customfield3=Professional&searchResultView=LIST"
+    "?locale=en_GB&optionsFacetsDD_customfield3=Professional"
+    "&searchResultView=LIST&markerViewed&carouselIndex&pageNumber=0"
+    "&facetFilters=%7B%22jobType%22%3A%5B%22Professional%22%5D%2C"
+    "%22sfstd_jobLocation_obj%22%3A%5B%22Venlo%22%5D%7D"
 )
 CANON_RESULTS_READY_SELECTORS = [
     "a[data-testid^='jobCardTitle_'][href]",
     "[data-testid='jobCardLocation']",
 ]
+CANON_JOB_CARD_SELECTOR = "a[data-testid^='jobCardTitle_'][href]"
 
 CANON_JOB_URL_RE = re.compile(
     r"^https://jobs\.cpp\.canon/job/[^/?#]+/\d+-en_GB/?$"
@@ -60,7 +64,7 @@ class CanonClientAdapter(BaseClientAdapter):
     ) -> set[str]:
         hrefs: set[str] = set()
 
-        links = page.locator("a[data-testid^='jobCardTitle_'][href]")
+        links = page.locator(CANON_JOB_CARD_SELECTOR)
         count = links.count()
         log(f"{context}: found {count} vacancy cards")
 
@@ -94,73 +98,26 @@ class CanonClientAdapter(BaseClientAdapter):
         log(f"{context}: collected {len(hrefs)} job links from current page")
         return hrefs
 
-    def _get_next_page_url(self, page: Any) -> str | None:
-        next_selectors = [
-            "button[aria-label='next page']",
-            "button[aria-label='Next']",
-            "a[aria-label='Next']",
-        ]
+    def _page_card_count(self, page: Any) -> int:
+        return page.locator(CANON_JOB_CARD_SELECTOR).count()
 
-        for selector in next_selectors:
-            try:
-                element = page.locator(selector).first
-                if element.count() == 0:
-                    continue
+    def _build_page_url(self, page_number: int) -> str:
+        parsed = urlparse(self.ENTRY_URL)
+        query_items = parse_qsl(parsed.query, keep_blank_values=True)
+        updated_items: list[tuple[str, str]] = []
+        replaced = False
 
-                href = element.get_attribute("href")
-                if href:
-                    return urljoin(page.url, href)
+        for key, value in query_items:
+            if key == "pageNumber":
+                updated_items.append((key, str(page_number)))
+                replaced = True
+            else:
+                updated_items.append((key, value))
 
-                tag_name = element.evaluate("(el) => el.tagName.toLowerCase()")
-                if tag_name == "button":
-                    return "__CLICK_NEXT__"
-            except Exception:
-                continue
+        if not replaced:
+            updated_items.append(("pageNumber", str(page_number)))
 
-        return None
-
-    def _click_next_page(self, page: Any) -> bool:
-        next_selectors = [
-            "button[aria-label='next page']",
-            "button[aria-label='Next']",
-            "a[aria-label='Next']",
-        ]
-
-        for selector in next_selectors:
-            try:
-                element = page.locator(selector).first
-                if element.count() == 0:
-                    continue
-
-                disabled = element.get_attribute("disabled")
-                aria_disabled = element.get_attribute("aria-disabled")
-                class_name = element.get_attribute("class") or ""
-
-                if (
-                    disabled is not None
-                    or aria_disabled == "true"
-                    or "disabled" in class_name.lower()
-                ):
-                    return False
-
-                element.click()
-                page.wait_for_timeout(1500)
-                return True
-            except Exception:
-                continue
-
-        return False
-
-    def _page_state_key(self, page: Any) -> str:
-        hrefs: list[str] = []
-        links = page.locator("a[data-testid^='jobCardTitle_'][href]")
-
-        for index in range(links.count()):
-            href = links.nth(index).get_attribute("href")
-            if href:
-                hrefs.append(urljoin(page.url, href))
-
-        return "|".join(sorted(hrefs))
+        return urlunparse(parsed._replace(query=urlencode(updated_items, doseq=True)))
 
     def _collect_links_from_paginated_listing(
         self,
@@ -170,23 +127,23 @@ class CanonClientAdapter(BaseClientAdapter):
         job_limit: int,
     ) -> set[str]:
         collected_links: set[str] = set()
-        visited_page_keys: set[str] = set()
-        page_index = 1
+        page_number = 0
 
         while True:
-            current_url = page.url
+            page_url = self._build_page_url(page_number)
+            self._open_page(page, page_url)
+
+            page_index = page_number + 1
             page_links = self._collect_job_links_from_page(
                 page,
                 f"{context} page {page_index}",
                 job_limit=job_limit - len(collected_links),
             )
+            card_count = self._page_card_count(page)
 
-            page_key = f"{current_url}::{self._page_state_key(page)}"
-            if page_key in visited_page_keys:
-                log(f"{context}: detected repeated page state, stopping")
+            if card_count == 0:
+                log(f"{context} page {page_index}: empty page, stopping")
                 break
-
-            visited_page_keys.add(page_key)
 
             before = len(collected_links)
             collected_links.update(page_links)
@@ -201,22 +158,7 @@ class CanonClientAdapter(BaseClientAdapter):
                 log(f"{context}: reached job limit, stopping")
                 break
 
-            next_page = self._get_next_page_url(page)
-            if not next_page:
-                log(f"{context}: no next page control")
-                break
-
-            if next_page == "__CLICK_NEXT__":
-                log(f"{context}: clicking next page")
-                moved = self._click_next_page(page)
-                if not moved:
-                    log(f"{context}: next page control not usable")
-                    break
-            else:
-                log(f"{context}: following next page -> {next_page}")
-                self._open_page(page, next_page)
-
-            page_index += 1
+            page_number += 1
 
         return collected_links
 
@@ -228,7 +170,6 @@ class CanonClientAdapter(BaseClientAdapter):
     ) -> List[str]:
         with browser.new_context() as context:
             page = context.new_page()
-            self._open_page(page, self.ENTRY_URL)
 
             hrefs = self._collect_links_from_paginated_listing(
                 page,
