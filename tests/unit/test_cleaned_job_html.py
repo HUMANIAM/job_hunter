@@ -19,12 +19,20 @@ def test_cleaned_job_html_line_normalizes_fields() -> None:
     assert line.text == "Example text"
 
 
+def test_cleaned_job_html_line_collapses_multiline_text_to_one_line() -> None:
+    line = CleanedJobHtmlLine(
+        html_tag="p",
+        text=" Example\ntext\twith   extra   spaces ",
+    )
+
+    assert line.text == "Example text with extra spaces"
+
+
 @pytest.mark.parametrize(
     ("payload", "error_message"),
     [
         ({"html_tag": "div-1", "text": "Example"}, "invalid html tag"),
         ({"html_tag": "div", "text": "   "}, "text is empty"),
-        ({"html_tag": "div", "text": "Example\ntext"}, "text must be a single line"),
     ],
 )
 def test_cleaned_job_html_line_rejects_invalid_values(
