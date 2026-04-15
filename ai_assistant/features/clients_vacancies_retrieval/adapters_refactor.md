@@ -36,18 +36,21 @@ That means the true common model is not only "open page, grab links, click next"
 
 ## Where The Duplication Is
 
-### 1. Adapter lifecycle and limit normalization
+### 1. Adapter lifecycle and collection entrypoint
 
-All six adapters repeat the same `job_limit is None -> sys.maxsize` pattern and then call a private collection method:
+All six adapters repeat the same entrypoint pattern: the public `collect_job_links(...)`
+method delegates immediately to a private collection helper:
 
-- `clients/sources/asml/adapter.py:40`
-- `clients/sources/canon/adapter.py:34`
-- `clients/sources/daf/adapter.py:37`
-- `clients/sources/philips/adapter.py:36`
-- `clients/sources/sioux/adapter.py:23`
-- `clients/sources/vanderlande/adapter.py:34`
+- `clients/sources/asml/adapter.py:39`
+- `clients/sources/canon/adapter.py:33`
+- `clients/sources/daf/adapter.py:36`
+- `clients/sources/philips/adapter.py:35`
+- `clients/sources/sioux/adapter.py:22`
+- `clients/sources/vanderlande/adapter.py:33`
 
-`BaseClientAdapter` in `clients/base.py:6` is too thin to capture any of the shared retrieval protocol.
+`BaseClientAdapter` in `clients/base.py:6` captures the public method shape, but it
+still does not describe the retrieval protocol that all concrete adapters are
+following.
 
 ### 2. Page opening and preparation
 
@@ -101,57 +104,122 @@ The data source changes, but the loop shape is still "load page -> extract -> me
 
 ## Recommended Target Design
 
-### 1. Keep `BaseClientAdapter`, but add reusable collector bases
+### 1. Define the adapter protocol explicitly
 
-Do not turn `BaseClientAdapter` into a huge abstract surface. Keep the public contract small and add focused helper bases instead:
+The first step should be to document the retrieval protocol on `BaseClientAdapter`
+level, instead of describing that contract indirectly inside one concrete
+realization.
 
-- `BrowserListingAdapter`
-- `SeededBrowserListingAdapter`
-- `ApiListingAdapter`
+The public protocol should stay small:
+
+```python
+class BaseClientAdapter(ABC):
+    def collect_job_links(
+        self,
+        browser: Any,
+        *,
+        job_limit: int,
+    ) -> list[str]:
+        raise NotImplementedError
+
+    def transform_downloaded_html(...) -> tuple[str | None, str]:
+        ...
+```
+
+Recommended contract for `collect_job_links(...)`:
+
+- `job_limit` is already normalized before the adapter is called.
+- The adapter owns one collection run end-to-end.
+- Browser-driven realizations may open one Playwright browser context for that run.
+- The returned URLs are job-detail URLs, deduplicated, deterministic, and sorted.
+- The adapter realization is responsible for source-specific traversal, filtering,
+  and pagination.
+- The adapter instance itself should stay stateless across runs.
+
+Recommended contract for `transform_downloaded_html(...)`:
+
+- It is optional and independent from link collection.
+- It may normalize downloaded job HTML, but it does not participate in pagination
+  or link discovery.
+
+Different realizations can satisfy the same protocol with different result sources:
+
+- `BrowserListingAdapter` for DOM-driven listing pages
+- `SeededBrowserListingAdapter` for DOM-driven listings that first fan out into
+  multiple seeds or facets
+- `ApiListingAdapter` for API-driven result streams
 
 That gives reuse without forcing `Philips` into a Playwright-shaped abstraction.
 
-### 2. Extract shared browser listing orchestration
+### 2. `BrowserListingAdapter` as one protocol realization
 
-Create one shared base for the dominant pattern:
+`BrowserListingAdapter` should document what is specific about browser listing
+pages and how that realization fulfills the shared adapter protocol.
+
+Suggested shape:
 
 ```python
 class BrowserListingAdapter(BaseClientAdapter):
     entry_url: str
     ready_selectors: Sequence[str]
     cookie_selectors: Sequence[str] = ()
-    listing_context: str
+    listing_label: str
     pagination: BrowserPaginationStrategy
 
-    def extract_links_from_page(
+    def _extract_links_from_page(
         self,
         page: Page,
         *,
         remaining: int,
-        context: str,
+        log_context: str,
     ) -> set[str]:
         raise NotImplementedError
 ```
 
-What this base should own:
+`BrowserListingAdapter` is specific to clients where:
 
-- normalize `job_limit`
-- open browser context and page
-- call shared page preparation
-- iterate pages
+- the result source is the current page DOM
+- the collection run starts from one browser entry URL
+- pagination stays inside the listing surface
+
+How `BrowserListingAdapter` implements the shared adapter contract:
+
+- open one Playwright browser context and initial page for the run
+- open `entry_url`
+- apply shared page preparation using `ready_selectors` and `cookie_selectors`
+- iterate listing pages using the configured pagination strategy
+- call `_extract_links_from_page(...)` on each page
+- enforce `job_limit`
 - detect repeated page state
-- merge unique links
-- sort final output
-- log generic progress
+- merge unique links and return them in sorted order
+- emit generic progress logs using `listing_label`
 
-What adapters should still own:
+What the subclass contract should be:
 
-- selectors
-- link normalization
-- per-card filtering
-- site-specific stop conditions when needed
+- provide `entry_url`
+- provide readiness and cookie selectors
+- provide a `listing_label`
+- provide a pagination strategy
+- implement `extract_links_from_page(...)`
 
-`ASML`, `DAF`, and `Vanderlande` should become mostly configuration plus `extract_links_from_page(...)`.
+What `_extract_links_from_page(...)` should own:
+
+- find candidate elements on the current page
+- turn them into absolute job URLs
+- normalize and filter those URLs
+- return only the links visible on the current page
+
+What it should not own:
+
+- creating or closing the browser context
+- page-to-page iteration
+- deduplication across pages
+- final sorting
+- generic stop logic
+
+`ASML`, `DAF`, and `Vanderlande` should become mostly configuration plus
+`extract_links_from_page(...)`. `Canon` should also fit this realization, but with
+`QueryParamPagination` instead of a next-control strategy.
 
 ### 3. Introduce pagination strategies instead of hardcoding next-page logic in adapters
 
