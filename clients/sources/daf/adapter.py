@@ -36,10 +36,10 @@ class DafClientAdapter(BaseClientAdapter):
     def _collect_job_links_in_context(
         self,
         context: Any,
-        page: Any,
         *,
         job_limit: int,
     ) -> List[str]:
+        page = context.new_page()
         self._open_page(page, self.ENTRY_URL)
         hrefs = self._collect_links_from_paginated_listing(
             page,
