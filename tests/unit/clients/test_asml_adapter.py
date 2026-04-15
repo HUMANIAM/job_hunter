@@ -119,6 +119,53 @@ class FakePage:
         self.wait_calls.append(delay_ms)
 
 
+class FakeContext:
+    def __init__(self, page: FakePage) -> None:
+        self.page = page
+        self.new_page_calls = 0
+
+    def new_page(self) -> FakePage:
+        self.new_page_calls += 1
+        return self.page
+
+
+def test_collect_job_links_in_context_uses_context_page(monkeypatch) -> None:
+    adapter = AsmlClientAdapter()
+    page = FakePage(
+        url="https://www.asml.com/en/careers/find-your-job?job_country=Netherlands&job_type=Fix"
+    )
+    context = FakeContext(page)
+    open_calls: list[tuple[object, str]] = []
+    listing_calls: list[tuple[object, str, int]] = []
+
+    monkeypatch.setattr(
+        adapter,
+        "_open_page",
+        lambda page_obj, url: open_calls.append((page_obj, url)),
+    )
+    monkeypatch.setattr(
+        adapter,
+        "_collect_links_from_paginated_listing",
+        lambda page_obj, context, *, job_limit: (
+            listing_calls.append((page_obj, context, job_limit))
+            or {
+                "https://www.asml.com/en/careers/find-your-job/b-role",
+                "https://www.asml.com/en/careers/find-your-job/a-role",
+            }
+        ),
+    )
+
+    links = adapter._collect_job_links_in_context(context, job_limit=5)
+
+    assert links == [
+        "https://www.asml.com/en/careers/find-your-job/a-role",
+        "https://www.asml.com/en/careers/find-your-job/b-role",
+    ]
+    assert context.new_page_calls == 1
+    assert open_calls == [(page, adapter.ENTRY_URL)]
+    assert listing_calls == [(page, "asml nl listing", 5)]
+
+
 def test_collect_job_links_from_page_keeps_live_asml_job_urls() -> None:
     adapter = AsmlClientAdapter()
     page = FakePage(
