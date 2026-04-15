@@ -318,3 +318,49 @@ def test_collect_links_from_paginated_listing_common_follows_until_stop(
         "https://example.com/jobs/beta",
     }
     assert transitions == ["https://example.com/jobs?page=2"]
+
+
+def test_collect_links_from_paginated_listing_stops_gracefully_when_click_next_is_not_usable(
+    monkeypatch,
+) -> None:
+    adapter = UrlFollowingBrowserListingAdapter()
+    page = _MutablePaginationPage("https://example.com/jobs?page=1")
+    messages: list[str] = []
+
+    monkeypatch.setattr(
+        adapter,
+        "_get_job_links_from_page",
+        lambda page_obj, log_context, *, job_limit: {
+            "https://example.com/jobs/alpha",
+        },
+    )
+    monkeypatch.setattr(
+        adapter,
+        "_get_page_advance",
+        lambda page_obj: PageAdvance(advance_decision=AdvanceDecision.CLICK),
+    )
+    monkeypatch.setattr(
+        adapter,
+        "_get_next_page",
+        lambda page_obj, page_advance: adapter._get_next_page_common(
+            page_obj,
+            page_advance,
+            click_next_page=lambda _page: False,
+        ),
+    )
+    monkeypatch.setattr(browser_listing_adapter_module, "log", messages.append)
+
+    links = adapter._collect_links_from_paginated_listing(
+        page,
+        "example listing",
+        job_limit=10,
+    )
+
+    assert links == {
+        "https://example.com/jobs/alpha",
+    }
+    assert messages == [
+        "example listing page 1: added 1 new links | cumulative=1",
+        "example listing: clicking next page",
+        "example listing: next page control not usable",
+    ]

@@ -10,6 +10,9 @@ from infra.browser import open_and_prepare_page
 from infra.logging import log
 
 
+NEXT_PAGE_CONTROL_NOT_USABLE = "next page control not usable"
+
+
 class AdvanceDecision(str, Enum):
     """How a browser listing should advance after processing the current page."""
 
@@ -149,7 +152,7 @@ class BrowserListingAdapter(BaseClientAdapter, ABC):
             if click_next_page is None:
                 raise ValueError("CLICK requires click_next_page")
             if not click_next_page(page):
-                raise RuntimeError("next page control not usable")
+                raise RuntimeError(NEXT_PAGE_CONTROL_NOT_USABLE)
             return page
 
         raise ValueError("STOP cannot be executed as a next page advance")
@@ -218,7 +221,14 @@ class BrowserListingAdapter(BaseClientAdapter, ABC):
             elif page_advance.advance_decision == AdvanceDecision.CLICK:
                 log(f"{context}: clicking next page")
 
-            page = self._get_next_page(page, page_advance)
+            try:
+                page = self._get_next_page(page, page_advance)
+            except RuntimeError as exc:
+                if str(exc) != NEXT_PAGE_CONTROL_NOT_USABLE:
+                    raise
+
+                log(f"{context}: {NEXT_PAGE_CONTROL_NOT_USABLE}")
+                break
             page_index += 1
 
         return collected_links
