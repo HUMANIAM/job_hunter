@@ -30,13 +30,21 @@ CANON_JOB_URL_RE = re.compile(
 class CanonClientAdapter(BaseClientAdapter):
     ENTRY_URL = CANON_ENTRY_URL
 
-    def collect_job_links(
+    def _collect_job_links_in_context(
         self,
-        browser: Any,
+        context: Any,
+        page: Any,
         *,
         job_limit: int,
     ) -> List[str]:
-        return self._collect_job_links_via_listing(browser, job_limit=job_limit)
+        hrefs = self._collect_links_from_paginated_listing(
+            page,
+            context="canon nl listing",
+            job_limit=job_limit,
+        )
+
+        log(f"canon nl listing: collected {len(hrefs)} unique job links")
+        return sorted(hrefs)
 
     def _open_page(self, page: Any, url: str) -> None:
         clicked_selectors = open_and_prepare_page(
@@ -159,21 +167,3 @@ class CanonClientAdapter(BaseClientAdapter):
             page_number += 1
 
         return collected_links
-
-    def _collect_job_links_via_listing(
-        self,
-        browser: Any,
-        *,
-        job_limit: int,
-    ) -> List[str]:
-        with browser.new_context() as context:
-            page = context.new_page()
-
-            hrefs = self._collect_links_from_paginated_listing(
-                page,
-                context="canon nl listing",
-                job_limit=job_limit,
-            )
-
-            log(f"canon nl listing: collected {len(hrefs)} unique job links")
-            return sorted(hrefs)
