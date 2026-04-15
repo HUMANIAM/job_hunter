@@ -30,13 +30,22 @@ VANDERLANDE_JOB_URL_RE = re.compile(
 class VanderlandeClientAdapter(BaseClientAdapter):
     ENTRY_URL = VANDERLANDE_ENTRY_URL
 
-    def collect_job_links(
+    def _collect_job_links_in_context(
         self,
-        browser: Any,
+        context: Any,
+        page: Any,
         *,
         job_limit: int,
     ) -> List[str]:
-        return self._collect_job_links_via_listing(browser, job_limit=job_limit)
+        self._open_page(page, self.ENTRY_URL)
+        hrefs = self._collect_links_from_paginated_listing(
+            page,
+            context="vanderlande nl listing",
+            job_limit=job_limit,
+        )
+
+        log(f"vanderlande nl listing: collected {len(hrefs)} unique job links")
+        return sorted(hrefs)
 
     def transform_downloaded_html(
         self,
@@ -208,22 +217,3 @@ class VanderlandeClientAdapter(BaseClientAdapter):
             page_index += 1
 
         return collected_links
-
-    def _collect_job_links_via_listing(
-        self,
-        browser: Any,
-        *,
-        job_limit: int,
-    ) -> List[str]:
-        with browser.new_context() as context:
-            page = context.new_page()
-            self._open_page(page, self.ENTRY_URL)
-
-            hrefs = self._collect_links_from_paginated_listing(
-                page,
-                context="vanderlande nl listing",
-                job_limit=job_limit,
-            )
-
-            log(f"vanderlande nl listing: collected {len(hrefs)} unique job links")
-            return sorted(hrefs)

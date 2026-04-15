@@ -19,14 +19,35 @@ SIOUX_JOB_URL_RE = re.compile(r"^https://vacancy\.sioux\.eu/vacancies/.+\.html$"
 class SiouxClientAdapter(BaseClientAdapter):
     ENTRY_URL = SIOUX_ENTRY_URL
 
-    def collect_job_links(
+    def _collect_job_links_in_context(
         self,
-        browser: Any,
+        context: Any,
+        page: Any,
         *,
         job_limit: int,
     ) -> List[str]:
-        return self._collect_job_links_via_facets(browser, job_limit=job_limit)
+        self._open_page(page, self.ENTRY_URL)
+        facets = self._extract_discipline_facets(page)
+        log(f"collected {len(facets)} discipline facets")
 
+        all_hrefs: set[str] = set()
+        for facet_name, facet_url, expected_count in facets:
+            if len(all_hrefs) >= job_limit:
+                log("facet traversal: reached job limit, stopping")
+                break
+
+            log(f"--- facet traversal: {facet_name} ---")
+            facet_links = self._collect_links_for_facet(
+                context,
+                facet_name,
+                facet_url,
+                expected_count,
+                job_limit=job_limit - len(all_hrefs),
+            )
+
+            all_hrefs.update(facet_links)
+
+        return sorted(all_hrefs)
 
     def _open_page(self, page: Any, url: str) -> None:
         clicked_selectors = open_and_prepare_page(
@@ -39,8 +60,6 @@ class SiouxClientAdapter(BaseClientAdapter):
             log("accepted cookie banner")
 
         log(f"current page url: {page.url}")
-
-
     def _extract_discipline_facets(self, page: Any) -> List[tuple[str, str, int]]:
         facets: List[tuple[str, str, int]] = []
 
@@ -194,38 +213,3 @@ class SiouxClientAdapter(BaseClientAdapter):
         )
         return facet_links
 
-
-    def _collect_job_links_via_facets(
-        self,
-        browser: Any,
-        *,
-        job_limit: int,
-    ) -> List[str]:
-        all_hrefs: set[str] = set()
-
-        # collect discipline facets from the entry page
-        with browser.new_context() as context:
-            page = context.new_page()
-            self._open_page(page, self.ENTRY_URL)
-            facets = self._extract_discipline_facets(page)
-            log(f"collected {len(facets)} discipline facets")
-
-
-            # collect job links from each facet
-            for facet_name, facet_url, expected_count in facets:
-                if len(all_hrefs) >= job_limit:
-                    log("facet traversal: reached job limit, stopping")
-                    break
-
-                log(f"--- facet traversal: {facet_name} ---")
-                facet_links = self._collect_links_for_facet(
-                    context,
-                    facet_name,
-                    facet_url,
-                    expected_count,
-                    job_limit=job_limit - len(all_hrefs),
-                )
-
-                all_hrefs.update(facet_links)
-
-            return sorted(all_hrefs)

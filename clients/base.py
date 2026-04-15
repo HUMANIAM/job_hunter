@@ -1,10 +1,9 @@
 from __future__ import annotations
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Any, List, Tuple
 
 
 class BaseClientAdapter(ABC):
-    @abstractmethod
     def collect_job_links(
         self,
         browser: Any,
@@ -12,7 +11,24 @@ class BaseClientAdapter(ABC):
         job_limit: int,
     ) -> List[str]:
         """Return job detail links for this client."""
-        raise NotImplementedError
+        with browser.new_context() as context:
+            page = context.new_page()
+            return self._collect_job_links_in_context(
+                context,
+                page,
+                job_limit=job_limit,
+            )
+
+    def _collect_job_links_in_context(
+        self,
+        context: Any,
+        page: Any,
+        *,
+        job_limit: int,
+    ) -> List[str]:
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement _collect_job_links_in_context"
+        )
 
     def transform_downloaded_html(
         self,

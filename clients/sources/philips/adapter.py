@@ -32,13 +32,22 @@ PHILIPS_JOB_URL_RE = re.compile(
 class PhilipsClientAdapter(BaseClientAdapter):
     ENTRY_URL = PHILIPS_ENTRY_URL
 
-    def collect_job_links(
+    def _collect_job_links_in_context(
         self,
-        browser: Any,
+        context: Any,
+        page: Any,
         *,
         job_limit: int,
     ) -> List[str]:
-        return self._collect_job_links_via_listing(browser, job_limit=job_limit)
+        self._open_page(page, self.ENTRY_URL)
+        hrefs = self._collect_links_from_paginated_listing(
+            page,
+            context="philips nl listing",
+            job_limit=job_limit,
+        )
+
+        log(f"philips nl listing: collected {len(hrefs)} unique job links")
+        return sorted(hrefs)
 
     def _open_page(self, page: Any, url: str) -> None:
         open_and_prepare_page(
@@ -201,22 +210,3 @@ class PhilipsClientAdapter(BaseClientAdapter):
                 break
 
         return collected_links
-
-    def _collect_job_links_via_listing(
-        self,
-        browser: Any,
-        *,
-        job_limit: int,
-    ) -> List[str]:
-        with browser.new_context() as context:
-            page = context.new_page()
-            self._open_page(page, self.ENTRY_URL)
-
-            hrefs = self._collect_links_from_paginated_listing(
-                page,
-                context="philips nl listing",
-                job_limit=job_limit,
-            )
-
-            log(f"philips nl listing: collected {len(hrefs)} unique job links")
-            return sorted(hrefs)
