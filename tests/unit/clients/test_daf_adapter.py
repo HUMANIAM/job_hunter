@@ -16,6 +16,10 @@ if "playwright.sync_api" not in sys.modules:
     sys.modules["playwright"] = playwright
     sys.modules["playwright.sync_api"] = sync_api
 
+from clients.sources.browser_listing_adapter import AdvanceDecision, PageAdvance
+from clients.sources.browser_listing_adapter import (
+    BrowserListingAdapter,
+)
 from clients.sources.daf.adapter import DafClientAdapter
 
 
@@ -142,9 +146,9 @@ def test_collect_job_links_in_context_uses_context_page(monkeypatch) -> None:
         lambda page_obj, url: open_calls.append((page_obj, url)),
     )
     monkeypatch.setattr(
-        adapter,
+        BrowserListingAdapter,
         "_collect_links_from_paginated_listing",
-        lambda page_obj, context, *, job_limit: (
+        lambda self, page_obj, context, *, job_limit: (
             listing_calls.append((page_obj, context, job_limit))
             or {
                 "https://www.daf.com/en/working-at-daf/vacancies/b-job",
@@ -160,11 +164,11 @@ def test_collect_job_links_in_context_uses_context_page(monkeypatch) -> None:
         "https://www.daf.com/en/working-at-daf/vacancies/b-job",
     ]
     assert context.new_page_calls == 1
-    assert open_calls == [(page, adapter.ENTRY_URL)]
+    assert open_calls == [(page, adapter.entry_url)]
     assert listing_calls == [(page, "daf nl professionals listing", 5)]
 
 
-def test_collect_job_links_from_page_keeps_live_daf_job_urls() -> None:
+def test_get_job_links_from_page_keeps_live_daf_job_urls() -> None:
     adapter = DafClientAdapter()
     page = FakePage(
         url=(
@@ -178,7 +182,7 @@ def test_collect_job_links_from_page_keeps_live_daf_job_urls() -> None:
         ],
     )
 
-    links = adapter._collect_job_links_from_page(
+    links = adapter._get_job_links_from_page(
         page,
         "daf nl professionals listing page 1",
         job_limit=10,
@@ -190,7 +194,32 @@ def test_collect_job_links_from_page_keeps_live_daf_job_urls() -> None:
     }
 
 
-def test_get_next_page_url_detects_click_based_next_link() -> None:
+def test_get_page_advance_resolves_href_next_link() -> None:
+    adapter = DafClientAdapter()
+    page = FakePage(
+        url=(
+            "https://www.daf.com/en/working-at-daf/vacancies"
+            "?Page=1&functionlevel=Professionals&region=Netherlands"
+        ),
+        selector_map={
+            "a.page-link.page-link--next": FakeElement(
+                href="?Page=2&functionlevel=Professionals&region=Netherlands"
+            ),
+        },
+    )
+
+    page_advance = adapter._get_page_advance(page)
+
+    assert page_advance == PageAdvance(
+        advance_decision=AdvanceDecision.FOLLOW_URL,
+        next_page_url=(
+            "https://www.daf.com/en/working-at-daf/vacancies"
+            "?Page=2&functionlevel=Professionals&region=Netherlands"
+        ),
+    )
+
+
+def test_get_page_advance_resolves_click_based_next_link() -> None:
     adapter = DafClientAdapter()
     page = FakePage(
         url=(
@@ -202,14 +231,41 @@ def test_get_next_page_url_detects_click_based_next_link() -> None:
         },
     )
 
-    next_page = adapter._get_next_page_url(page)
+    page_advance = adapter._get_page_advance(page)
 
-    assert next_page == "__CLICK_NEXT__"
+    assert page_advance == PageAdvance(
+        advance_decision=AdvanceDecision.CLICK,
+    )
 
 
-def test_click_next_page_clicks_click_based_next_link() -> None:
+def test_get_page_advance_stops_on_disabled_click_next_link() -> None:
     adapter = DafClientAdapter()
-    next_link = FakeElement(data_page="next", class_name="page-link page-link--next")
+    page = FakePage(
+        url=(
+            "https://www.daf.com/en/working-at-daf/vacancies"
+            "?Page=1&functionlevel=Professionals&region=Netherlands"
+        ),
+        selector_map={
+            "a.page-link.page-link--next": FakeElement(
+                data_page="next",
+                class_name="page-link page-link--next disabled",
+            ),
+        },
+    )
+
+    page_advance = adapter._get_page_advance(page)
+
+    assert page_advance == PageAdvance(
+        advance_decision=AdvanceDecision.STOP,
+    )
+
+
+def test_get_next_page_clicks_click_based_next_link_and_waits() -> None:
+    adapter = DafClientAdapter()
+    next_link = FakeElement(
+        data_page="next",
+        class_name="page-link page-link--next",
+    )
     page = FakePage(
         url=(
             "https://www.daf.com/en/working-at-daf/vacancies"
@@ -220,8 +276,11 @@ def test_click_next_page_clicks_click_based_next_link() -> None:
         },
     )
 
-    moved = adapter._click_next_page(page)
+    next_page = adapter._get_next_page(
+        page,
+        PageAdvance(advance_decision=AdvanceDecision.CLICK),
+    )
 
-    assert moved is True
+    assert next_page is page
     assert next_link.clicked is True
     assert page.wait_calls == [1500]

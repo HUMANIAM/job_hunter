@@ -4,9 +4,11 @@ import re
 from typing import Any, List
 from urllib.parse import urljoin
 
-from clients.base import BaseClientAdapter
+from clients.sources.browser_listing_adapter import (
+    BrowserListingAdapter,
+    PageAdvance,
+)
 from clients.sources.vanderlande.job_html import render_vanderlande_job_html
-from infra.browser import open_and_prepare_page
 from infra.logging import log
 
 
@@ -27,8 +29,10 @@ VANDERLANDE_JOB_URL_RE = re.compile(
 )
 
 
-class VanderlandeClientAdapter(BaseClientAdapter):
-    ENTRY_URL = VANDERLANDE_ENTRY_URL
+class VanderlandeClientAdapter(BrowserListingAdapter):
+    entry_url = VANDERLANDE_ENTRY_URL
+    listing_label = "vanderlande nl listing"
+    results_ready_selectors = tuple(VANDERLANDE_RESULTS_READY_SELECTORS)
 
     def _collect_job_links_in_context(
         self,
@@ -37,15 +41,30 @@ class VanderlandeClientAdapter(BaseClientAdapter):
         job_limit: int,
     ) -> List[str]:
         page = context.new_page()
-        self._open_page(page, self.ENTRY_URL)
+        self._open_page(page, self.entry_url)
         hrefs = self._collect_links_from_paginated_listing(
             page,
-            context="vanderlande nl listing",
+            self.listing_label,
             job_limit=job_limit,
         )
 
         log(f"vanderlande nl listing: collected {len(hrefs)} unique job links")
         return sorted(hrefs)
+
+    def _collect_links_from_paginated_listing(
+        self,
+        page: Any,
+        context: str,
+        expected_count: int | None = None,
+        *,
+        job_limit: int,
+    ) -> set[str]:
+        return super()._collect_links_from_paginated_listing(
+            page,
+            context,
+            expected_count,
+            job_limit=job_limit,
+        )
 
     def transform_downloaded_html(
         self,
@@ -61,79 +80,55 @@ class VanderlandeClientAdapter(BaseClientAdapter):
         transformed_title, transformed_html = rendered
         return transformed_title or title, transformed_html
 
-    def _open_page(self, page: Any, url: str) -> None:
-        open_and_prepare_page(
-            page,
-            url,
-            wait_for=VANDERLANDE_RESULTS_READY_SELECTORS,
-        )
-        log(f"current page url: {page.url}")
-
     def _is_job_url(self, url: str) -> bool:
         return bool(VANDERLANDE_JOB_URL_RE.match(url))
 
-    def _collect_job_links_from_page(
+    def _get_job_links_from_page(
         self,
         page: Any,
-        context: str,
+        log_context: str,
         *,
         job_limit: int,
     ) -> set[str]:
-        hrefs: set[str] = set()
+        return self._collect_job_links_from_page_common(
+            page,
+            log_context=log_context,
+            job_limit=job_limit,
+            candidates_selector="a[data-automation-id='jobTitle'][href]",
+            found_label="vacancy links",
+            normalize_href=lambda href: urljoin(page.url, href).split("?", 1)[0],
+            is_job_url=self._is_job_url,
+        )
 
-        links = page.locator("a[data-automation-id='jobTitle'][href]")
-        count = links.count()
-        log(f"{context}: found {count} vacancy links")
+    def _get_page_advance(self, page: Any) -> PageAdvance:
+        return self._get_page_advance_common(
+            page,
+            next_selectors=(
+                "button[aria-label='next']",
+                "button[data-uxi-element-id='next']",
+                "button[aria-label='Next']",
+                "a[aria-label='Next']",
+            ),
+            normalize_next_href=lambda href: urljoin(page.url, href),
+            is_click_next_control=lambda element: (
+                element.evaluate("(el) => el.tagName.toLowerCase()") == "button"
+            ),
+        )
 
-        for index in range(count):
-            href = links.nth(index).get_attribute("href")
-            if not href:
-                continue
-
-            full_url = urljoin(page.url, href).split("?", 1)[0]
-            if not self._is_job_url(full_url):
-                continue
-
-            hrefs.add(full_url)
-            if len(hrefs) >= job_limit:
-                break
-
-        log(f"{context}: collected {len(hrefs)} job links from current page")
-        return hrefs
-
-    def _get_next_page_url(self, page: Any) -> str | None:
-        next_selectors = [
-            "button[aria-label='next']",
-            "button[data-uxi-element-id='next']",
-            "button[aria-label='Next']",
-            "a[aria-label='Next']",
-        ]
-
-        for selector in next_selectors:
-            try:
-                element = page.locator(selector).first
-                if element.count() == 0:
-                    continue
-
-                href = element.get_attribute("href")
-                if href:
-                    return urljoin(page.url, href)
-
-                tag_name = element.evaluate("(el) => el.tagName.toLowerCase()")
-                if tag_name == "button":
-                    return "__CLICK_NEXT__"
-            except Exception:
-                continue
-
-        return None
+    def _get_next_page(self, page: Any, page_advance: PageAdvance) -> Any:
+        return self._get_next_page_common(
+            page,
+            page_advance,
+            click_next_page=self._click_next_page,
+        )
 
     def _click_next_page(self, page: Any) -> bool:
-        next_selectors = [
+        next_selectors = (
             "button[aria-label='next']",
             "button[data-uxi-element-id='next']",
             "button[aria-label='Next']",
             "a[aria-label='Next']",
-        ]
+        )
 
         for selector in next_selectors:
             try:
@@ -167,53 +162,8 @@ class VanderlandeClientAdapter(BaseClientAdapter):
         *,
         job_limit: int,
     ) -> set[str]:
-        collected_links: set[str] = set()
-        visited_page_keys: set[str] = set()
-        page_index = 1
-
-        while True:
-            current_url = page.url
-            page_links = self._collect_job_links_from_page(
-                page,
-                f"{context} page {page_index}",
-                job_limit=job_limit - len(collected_links),
-            )
-
-            page_key = f"{current_url}::{'|'.join(sorted(page_links))}"
-            if page_key in visited_page_keys:
-                log(f"{context}: detected repeated page state, stopping")
-                break
-
-            visited_page_keys.add(page_key)
-
-            before = len(collected_links)
-            collected_links.update(page_links)
-            after = len(collected_links)
-
-            log(
-                f"{context} page {page_index}: "
-                f"added {after - before} new links | cumulative={after}"
-            )
-
-            if len(collected_links) >= job_limit:
-                log(f"{context}: reached job limit, stopping")
-                break
-
-            next_page = self._get_next_page_url(page)
-            if not next_page:
-                log(f"{context}: no next page control")
-                break
-
-            if next_page == "__CLICK_NEXT__":
-                log(f"{context}: clicking next page")
-                moved = self._click_next_page(page)
-                if not moved:
-                    log(f"{context}: next page control not usable")
-                    break
-            else:
-                log(f"{context}: following next page -> {next_page}")
-                self._open_page(page, next_page)
-
-            page_index += 1
-
-        return collected_links
+        return super()._collect_links_from_paginated_listing(
+            page,
+            context,
+            job_limit=job_limit,
+        )
