@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-import sys
 from typing import Any, List
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
@@ -37,10 +36,9 @@ class PhilipsClientAdapter(BaseClientAdapter):
         self,
         browser: Any,
         *,
-        job_limit: int | None = None,
+        job_limit: int,
     ) -> List[str]:
-        limit = sys.maxsize if job_limit is None else job_limit
-        return self._collect_job_links_via_listing(browser, job_limit=limit)
+        return self._collect_job_links_via_listing(browser, job_limit=job_limit)
 
     def _open_page(self, page: Any, url: str) -> None:
         open_and_prepare_page(
@@ -155,7 +153,6 @@ class PhilipsClientAdapter(BaseClientAdapter):
         job_limit: int,
     ) -> set[str]:
         collected_links: set[str] = set()
-        visited_offsets: set[int] = set()
         page_index = 1
         offset = 0
 
@@ -165,12 +162,6 @@ class PhilipsClientAdapter(BaseClientAdapter):
             return collected_links
 
         while True:
-            if offset in visited_offsets:
-                log(f"{context}: detected repeated offset, stopping")
-                break
-
-            visited_offsets.add(offset)
-
             requested_limit = min(PHILIPS_PAGE_SIZE, job_limit - len(collected_links))
             results = self._fetch_job_results(
                 applied_facets={"locationHierarchy1": [facet_id]},

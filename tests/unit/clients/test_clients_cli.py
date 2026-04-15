@@ -25,14 +25,14 @@ from reporting.writer import raw_html_filename
 
 class FakeAdapter:
     def __init__(self) -> None:
-        self.calls: list[tuple[object, int | None]] = []
+        self.calls: list[tuple[object, int]] = []
         self.transform_calls: list[tuple[str, str | None, str]] = []
 
     def collect_job_links(
         self,
         browser: object,
         *,
-        job_limit: int | None = None,
+        job_limit: int,
     ) -> list[str]:
         self.calls.append((browser, job_limit))
         return [
@@ -103,6 +103,30 @@ def test_main_collects_links_and_prints_each_one(
         "https://vacancy.sioux.eu/vacancies/two.html",
         "saved links to: data/refactor/jobs/sioux/urls.md",
     ]
+
+
+def test_main_normalizes_missing_job_limit_to_sys_maxsize(
+    monkeypatch,
+) -> None:
+    fake_adapter = FakeAdapter()
+    fake_browser = object()
+
+    monkeypatch.setattr(clients_cli, "sync_playwright", lambda: _yield(object()))
+    monkeypatch.setattr(
+        clients_cli,
+        "launched_chromium",
+        lambda playwright, *, headless=True: _yield(fake_browser),
+    )
+    monkeypatch.setattr(clients_cli, "get_client_adapter", lambda client: fake_adapter)
+    monkeypatch.setattr(
+        clients_cli,
+        "download_job_html_pages",
+        lambda browser, links, *, adapter=None: [],
+    )
+
+    clients_cli.main(["sioux"])
+
+    assert fake_adapter.calls == [(fake_browser, sys.maxsize)]
 
 
 def test_main_downloads_html_from_urls_file_when_flag_enabled(

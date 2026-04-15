@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 from typing import Sequence
 
@@ -114,9 +115,15 @@ def main(argv: Sequence[str] | None = None) -> None:
                     )
                     output_path.write_text(page.html_content, encoding="utf-8")
     else:
+        normalized_job_limit = (
+            sys.maxsize if args.job_limit is None else args.job_limit
+        )
         with sync_playwright() as playwright:
             with launched_chromium(playwright, headless=True) as browser:
-                links = adapter.collect_job_links(browser, job_limit=args.job_limit)
+                links = adapter.collect_job_links(
+                    browser,
+                    job_limit=normalized_job_limit,
+                )
 
         _write_links_file(urls_path, links)
 

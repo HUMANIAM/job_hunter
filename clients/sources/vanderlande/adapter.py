@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import sys
 from typing import Any, List
 from urllib.parse import urljoin
 
@@ -35,10 +34,9 @@ class VanderlandeClientAdapter(BaseClientAdapter):
         self,
         browser: Any,
         *,
-        job_limit: int | None = None,
+        job_limit: int,
     ) -> List[str]:
-        limit = sys.maxsize if job_limit is None else job_limit
-        return self._collect_job_links_via_listing(browser, job_limit=limit)
+        return self._collect_job_links_via_listing(browser, job_limit=job_limit)
 
     def transform_downloaded_html(
         self,

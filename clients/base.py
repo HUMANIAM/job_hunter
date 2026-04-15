@@ -9,7 +9,7 @@ class BaseClientAdapter(ABC):
         self,
         browser: Any,
         *,
-        job_limit: int | None = None,
+        job_limit: int,
     ) -> List[str]:
         """Return job detail links for this client."""
         raise NotImplementedError
