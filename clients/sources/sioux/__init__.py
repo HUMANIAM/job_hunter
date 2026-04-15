@@ -1,3 +1,3 @@
-from clients.sources.sioux.adapter import SiouxClientAdapter
+from clients.sources.sioux.adapter import SiouxBrowserListingAdapter
 
-__all__ = ["SiouxClientAdapter"]
+__all__ = ["SiouxBrowserListingAdapter"]
