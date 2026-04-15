@@ -16,7 +16,10 @@ if "playwright.sync_api" not in sys.modules:
     sys.modules["playwright"] = playwright
     sys.modules["playwright.sync_api"] = sync_api
 
+from clients.sources.asml import adapter as asml_adapter_module
 from clients.sources.asml.adapter import AsmlClientAdapter
+from clients.sources.browser_listing_adapter import AdvanceDecision, PageAdvance
+from clients.sources.browser_listing_adapter import BrowserListingAdapter
 
 
 class FakeAnchor:
@@ -92,6 +95,11 @@ class FakeElement:
         self.clicked = True
 
 
+class FailingClickElement(FakeElement):
+    def click(self) -> None:
+        raise RuntimeError("click failed")
+
+
 class FakeSelectorResult:
     def __init__(self, element: FakeElement | MissingElement | None = None) -> None:
         self.first = element if element is not None else MissingElement()
@@ -144,9 +152,9 @@ def test_collect_job_links_in_context_uses_context_page(monkeypatch) -> None:
         lambda page_obj, url: open_calls.append((page_obj, url)),
     )
     monkeypatch.setattr(
-        adapter,
+        BrowserListingAdapter,
         "_collect_links_from_paginated_listing",
-        lambda page_obj, context, *, job_limit: (
+        lambda self, page_obj, context, *, job_limit: (
             listing_calls.append((page_obj, context, job_limit))
             or {
                 "https://www.asml.com/en/careers/find-your-job/b-role",
@@ -162,11 +170,11 @@ def test_collect_job_links_in_context_uses_context_page(monkeypatch) -> None:
         "https://www.asml.com/en/careers/find-your-job/b-role",
     ]
     assert context.new_page_calls == 1
-    assert open_calls == [(page, adapter.ENTRY_URL)]
-    assert listing_calls == [(page, "asml nl listing", 5)]
+    assert open_calls == [(page, adapter.entry_url)]
+    assert listing_calls == [(page, adapter.listing_label, 5)]
 
 
-def test_collect_job_links_from_page_keeps_live_asml_job_urls() -> None:
+def test_get_job_links_from_page_keeps_live_asml_job_urls() -> None:
     adapter = AsmlClientAdapter()
     page = FakePage(
         url="https://www.asml.com/en/careers/find-your-job?job_country=Netherlands&job_type=Fix",
@@ -178,7 +186,7 @@ def test_collect_job_links_from_page_keeps_live_asml_job_urls() -> None:
         ],
     )
 
-    links = adapter._collect_job_links_from_page(
+    links = adapter._get_job_links_from_page(
         page,
         "asml nl listing page 1",
         job_limit=10,
@@ -190,7 +198,28 @@ def test_collect_job_links_from_page_keeps_live_asml_job_urls() -> None:
     }
 
 
-def test_get_next_page_url_detects_lowercase_next_button() -> None:
+def test_get_page_advance_returns_follow_url_for_next_link() -> None:
+    adapter = AsmlClientAdapter()
+    page = FakePage(
+        url="https://www.asml.com/en/careers/find-your-job?job_country=Netherlands&job_type=Fix",
+        selector_map={
+            "a[rel='next']": FakeElement(
+                href="/en/careers/find-your-job?page=2",
+            ),
+        },
+    )
+
+    page_advance = adapter._get_page_advance(page)
+
+    assert page_advance == PageAdvance(
+        advance_decision=AdvanceDecision.FOLLOW_URL,
+        next_page_url=(
+            "https://www.asml.com/en/careers/find-your-job?page=2"
+        ),
+    )
+
+
+def test_get_page_advance_returns_click_for_next_button() -> None:
     adapter = AsmlClientAdapter()
     page = FakePage(
         url="https://www.asml.com/en/careers/find-your-job?job_country=Netherlands&job_type=Fix",
@@ -199,12 +228,14 @@ def test_get_next_page_url_detects_lowercase_next_button() -> None:
         },
     )
 
-    next_page = adapter._get_next_page_url(page)
+    page_advance = adapter._get_page_advance(page)
 
-    assert next_page == "__CLICK_NEXT__"
+    assert page_advance == PageAdvance(
+        advance_decision=AdvanceDecision.CLICK,
+    )
 
 
-def test_click_next_page_clicks_lowercase_next_button() -> None:
+def test_get_next_page_clicks_next_button_and_waits() -> None:
     adapter = AsmlClientAdapter()
     next_button = FakeElement(tag_name="button", class_name="pagination-next")
     page = FakePage(
@@ -214,8 +245,31 @@ def test_click_next_page_clicks_lowercase_next_button() -> None:
         },
     )
 
-    moved = adapter._click_next_page(page)
+    next_page = adapter._get_next_page(
+        page,
+        PageAdvance(advance_decision=AdvanceDecision.CLICK),
+    )
 
-    assert moved is True
+    assert next_page is page
     assert next_button.clicked is True
     assert page.wait_calls == [1500]
+
+
+def test_click_next_page_logs_click_exception(monkeypatch) -> None:
+    adapter = AsmlClientAdapter()
+    page = FakePage(
+        url="https://www.asml.com/en/careers/find-your-job?job_country=Netherlands&job_type=Fix",
+        selector_map={
+            "button[aria-label='next']": FailingClickElement(tag_name="button"),
+        },
+    )
+    messages: list[str] = []
+
+    monkeypatch.setattr(asml_adapter_module, "log", messages.append)
+
+    moved = adapter._click_next_page(page)
+
+    assert moved is False
+    assert messages == [
+        "asml nl listing: selector 'button[aria-label='next']' click raised RuntimeError: click failed"
+    ]
