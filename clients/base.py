@@ -12,17 +12,14 @@ class BaseClientAdapter(ABC):
     ) -> List[str]:
         """Return job detail links for this client."""
         with browser.new_context() as context:
-            page = context.new_page()
             return self._collect_job_links_in_context(
                 context,
-                page,
                 job_limit=job_limit,
             )
 
     def _collect_job_links_in_context(
         self,
         context: Any,
-        page: Any,
         *,
         job_limit: int,
     ) -> List[str]:

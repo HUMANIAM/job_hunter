@@ -36,20 +36,19 @@ class _FakeBrowser:
 
 class _ConcreteAdapter(BaseClientAdapter):
     def __init__(self) -> None:
-        self.calls: list[tuple[object, object, int]] = []
+        self.calls: list[tuple[object, int]] = []
 
     def _collect_job_links_in_context(
         self,
         context: object,
-        page: object,
         *,
         job_limit: int,
     ) -> list[str]:
-        self.calls.append((context, page, job_limit))
+        self.calls.append((context, job_limit))
         return ["https://example.com/job-1"]
 
 
-def test_collect_job_links_opens_one_context_and_one_page() -> None:
+def test_collect_job_links_opens_one_context() -> None:
     adapter = _ConcreteAdapter()
     browser = _FakeBrowser()
 
@@ -57,5 +56,5 @@ def test_collect_job_links_opens_one_context_and_one_page() -> None:
 
     assert result == ["https://example.com/job-1"]
     assert browser.new_context_calls == 1
-    assert browser.context.new_page_calls == 1
-    assert adapter.calls == [(browser.context, browser.context.page, 3)]
+    assert browser.context.new_page_calls == 0
+    assert adapter.calls == [(browser.context, 3)]
