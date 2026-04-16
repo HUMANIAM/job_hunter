@@ -12,11 +12,10 @@ if __package__ in {None, ""}:
     raise SystemExit("Run this CLI as a module: python -m clients.clients_cli ...")
 
 from clients.job_downloader import download_job_html_pages
-from playwright.sync_api import sync_playwright
 
 from clients.clients import Client, parse_client
 from clients.registry import get_client_adapter
-from infra.browser import launched_chromium
+from infra.browser import create_browser
 from reporting.writer import raw_html_filename
 
 
@@ -98,32 +97,28 @@ def main(argv: Sequence[str] | None = None) -> None:
         if args.job_limit is not None:
             links = links[: args.job_limit]
 
-        with sync_playwright() as playwright:
-            with launched_chromium(playwright, headless=True) as browser:
-                pages = download_job_html_pages(
-                    browser,
-                    links,
-                    adapter=adapter,
+        with create_browser(headless=True) as browser:
+            pages = download_job_html_pages(
+                browser,
+                links,
+                adapter=adapter,
+            )
+            output_dir = Path("data/refactor/jobs") / client.value / "html"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            for page in pages:
+                output_path = output_dir / raw_html_filename(
+                    page.title,
+                    page.url,
+                    html_content=page.html_content,
                 )
-                output_dir = Path("data/refactor/jobs") / client.value / "html"
-                output_dir.mkdir(parents=True, exist_ok=True)
-                for page in pages:
-                    output_path = output_dir / raw_html_filename(
-                        page.title,
-                        page.url,
-                        html_content=page.html_content,
-                    )
-                    output_path.write_text(page.html_content, encoding="utf-8")
+                output_path.write_text(page.html_content, encoding="utf-8")
     else:
         normalized_job_limit = (
             sys.maxsize if args.job_limit is None else args.job_limit
         )
-        with sync_playwright() as playwright:
-            with launched_chromium(playwright, headless=True) as browser:
-                links = adapter.collect_job_links(
-                    browser,
-                    job_limit=normalized_job_limit,
-                )
+        links = adapter.collect_job_links(
+            job_limit=normalized_job_limit,
+        )
 
         _write_links_file(urls_path, links)
 

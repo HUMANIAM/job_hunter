@@ -16,6 +16,7 @@ if "playwright.sync_api" not in sys.modules:
     sys.modules["playwright"] = playwright
     sys.modules["playwright.sync_api"] = sync_api
 
+from clients.sources import browser_listing_adapter as browser_listing_adapter_module
 from clients.sources.browser_listing_adapter import AdvanceDecision, PageAdvance
 from clients.sources.sioux.adapter import SiouxBrowserListingAdapter
 
@@ -165,6 +166,17 @@ class _FakeBrowser:
         return _Manager()
 
 
+class _FakeBrowserManager:
+    def __init__(self, browser: _FakeBrowser) -> None:
+        self.browser = browser
+
+    def __enter__(self) -> _FakeBrowser:
+        return self.browser
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        return None
+
+
 def test_sioux_browser_listing_adapter_uses_typed_default_returns(
     monkeypatch,
 ) -> None:
@@ -173,8 +185,13 @@ def test_sioux_browser_listing_adapter_uses_typed_default_returns(
     page = object()
     monkeypatch.setattr(adapter, "_extract_discipline_facets", lambda page_obj: [])
     monkeypatch.setattr(adapter, "_open_page", lambda page_obj, url: None)
+    monkeypatch.setattr(
+        browser_listing_adapter_module,
+        "create_browser",
+        lambda *, headless=True: _FakeBrowserManager(browser),
+    )
 
-    assert adapter.collect_job_links(browser, job_limit=10) == []
+    assert adapter.collect_job_links(job_limit=10) == []
     assert adapter._get_page_advance(_FakePaginationPage()) == PageAdvance(
         advance_decision=AdvanceDecision.STOP,
     )
