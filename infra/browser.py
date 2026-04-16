@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from typing import Iterator, Sequence
 
-from playwright.sync_api import Browser, Page, Playwright
+from playwright.sync_api import Browser, Page, Playwright, sync_playwright
 
 
 @contextmanager
@@ -17,6 +17,13 @@ def launched_chromium(
         yield browser
     finally:
         browser.close()
+
+
+@contextmanager
+def create_browser(*, headless: bool = True) -> Iterator[Browser]:
+    with sync_playwright() as playwright:
+        with launched_chromium(playwright, headless=headless) as browser:
+            yield browser
 
 
 def wait_for_page_ready(

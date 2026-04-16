@@ -6,7 +6,7 @@ from enum import Enum
 from typing import Any, Callable, Sequence
 
 from clients.base import BaseClientAdapter
-from infra.browser import open_and_prepare_page
+from infra.browser import create_browser, open_and_prepare_page
 from infra.logging import log
 
 
@@ -47,6 +47,27 @@ class BrowserListingAdapter(BaseClientAdapter, ABC):
     listing_label: str
     results_ready_selectors: Sequence[str]
     cookie_accept_selectors: Sequence[str] = ()
+
+    def collect_job_links(
+        self,
+        *,
+        job_limit: int,
+    ) -> list[str]:
+        with create_browser() as browser:
+            with browser.new_context() as context:
+                return self._collect_job_links_in_context(
+                    context,
+                    job_limit=job_limit,
+                )
+
+    @abstractmethod
+    def _collect_job_links_in_context(
+        self,
+        context: Any,
+        *,
+        job_limit: int,
+    ) -> list[str]:
+        raise NotImplementedError
 
     def _open_page(self, page: Any, url: str) -> None:
         """Open a listing page and apply the shared browser-listing preparation."""

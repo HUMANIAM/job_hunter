@@ -6,26 +6,11 @@ from typing import Any, List, Tuple
 class BaseClientAdapter(ABC):
     def collect_job_links(
         self,
-        browser: Any,
         *,
         job_limit: int,
     ) -> List[str]:
         """Return job detail links for this client."""
-        with browser.new_context() as context:
-            return self._collect_job_links_in_context(
-                context,
-                job_limit=job_limit,
-            )
-
-    def _collect_job_links_in_context(
-        self,
-        context: Any,
-        *,
-        job_limit: int,
-    ) -> List[str]:
-        raise NotImplementedError(
-            f"{self.__class__.__name__} must implement _collect_job_links_in_context"
-        )
+        raise NotImplementedError
 
     def transform_downloaded_html(
         self,

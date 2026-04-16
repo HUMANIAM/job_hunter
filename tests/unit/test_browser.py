@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from contextlib import contextmanager
+
 from infra import browser as browser_utils
 
 
@@ -41,6 +45,50 @@ class OpenAndPrepareFakePage:
     def locator(self, selector: str) -> OpenAndPrepareFakeLocator:
         self.calls.append(("locator", selector))
         return OpenAndPrepareFakeLocator(self.calls, selector)
+
+
+def test_create_browser_uses_sync_playwright_and_closes_browser(monkeypatch) -> None:
+    calls: list[tuple[str, object]] = []
+    fake_browser = object()
+    fake_playwright = object()
+
+    class FakePlaywrightManager:
+        def __enter__(self) -> object:
+            calls.append(("sync_enter", None))
+            return fake_playwright
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            calls.append(("sync_exit", exc_type))
+
+    def fake_sync_playwright() -> FakePlaywrightManager:
+        calls.append(("sync_playwright", None))
+        return FakePlaywrightManager()
+
+    def fake_launched_chromium(playwright, *, headless=True):
+        @contextmanager
+        def _manager():
+            calls.append(("launch", (playwright, headless)))
+            try:
+                yield fake_browser
+            finally:
+                calls.append(("close", fake_browser))
+
+        return _manager()
+
+    monkeypatch.setattr(browser_utils, "sync_playwright", fake_sync_playwright)
+    monkeypatch.setattr(browser_utils, "launched_chromium", fake_launched_chromium)
+
+    with browser_utils.create_browser(headless=False) as browser:
+        calls.append(("yielded", browser))
+
+    assert calls == [
+        ("sync_playwright", None),
+        ("sync_enter", None),
+        ("launch", (fake_playwright, False)),
+        ("yielded", fake_browser),
+        ("close", fake_browser),
+        ("sync_exit", None),
+    ]
 
 
 def test_wait_for_page_ready_waits_for_dom_and_selector() -> None:
