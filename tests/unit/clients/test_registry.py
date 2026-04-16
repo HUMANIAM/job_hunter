@@ -23,6 +23,7 @@ from clients.registry import get_client_adapter
 from clients.sources.asml.adapter import AsmlClientAdapter
 from clients.sources.canon.adapter import CanonAPIListingAdapter
 from clients.sources.daf.adapter import DafClientAdapter
+from clients.sources.philips.adapter import PhilipsAPIListingAdapter
 from clients.sources.sioux.adapter import SiouxBrowserListingAdapter
 
 
@@ -48,6 +49,12 @@ def test_get_client_adapter_returns_registered_daf_adapter() -> None:
     adapter = get_client_adapter(Client.DAF)
 
     assert isinstance(adapter, DafClientAdapter)
+
+
+def test_get_client_adapter_returns_registered_philips_adapter() -> None:
+    adapter = get_client_adapter(Client.PHILIPS)
+
+    assert isinstance(adapter, PhilipsAPIListingAdapter)
 
 
 def test_get_client_adapter_raises_clear_error_for_unknown_client() -> None:
