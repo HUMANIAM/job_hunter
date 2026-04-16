@@ -1,3 +1,5 @@
-from clients.sources.canon.adapter import CanonClientAdapter
+from clients.sources.canon.adapter import CanonAPIListingAdapter
 
-__all__ = ["CanonClientAdapter"]
+CanonClientAdapter = CanonAPIListingAdapter
+
+__all__ = ["CanonAPIListingAdapter", "CanonClientAdapter"]
