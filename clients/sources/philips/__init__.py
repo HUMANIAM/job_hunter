@@ -1,3 +1,6 @@
-from clients.sources.philips.adapter import PhilipsClientAdapter
+from clients.sources.philips.adapter import (
+    PhilipsAPIListingAdapter,
+    PhilipsClientAdapter,
+)
 
-__all__ = ["PhilipsClientAdapter"]
+__all__ = ["PhilipsAPIListingAdapter", "PhilipsClientAdapter"]

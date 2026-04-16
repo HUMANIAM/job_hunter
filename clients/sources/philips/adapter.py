@@ -1,212 +1,255 @@
 from __future__ import annotations
 
-import json
-import re
-from typing import Any, List
-from urllib.parse import urljoin
-from urllib.request import Request, urlopen
+from dataclasses import dataclass
+from typing import Any
 
-from clients.base import BaseClientAdapter
-from infra.browser import open_and_prepare_page
+import requests
+
+from clients.sources.api_listing_adapter import APIListingAdapter, APIPageResult
 from infra.logging import log
 
 
-PHILIPS_ENTRY_URL = "https://philips.wd3.myworkdayjobs.com/nl-nl/jobs-and-careers"
-PHILIPS_JOBS_API_URL = (
-    "https://philips.wd3.myworkdayjobs.com/wday/cxs/philips/jobs-and-careers/jobs"
-)
-PHILIPS_API_LOCALE = "nl-NL"
+ENTRY_URL = "https://philips.wd3.myworkdayjobs.com/nl-nl/jobs-and-careers"
+API_URL = "https://philips.wd3.myworkdayjobs.com/wday/cxs/philips/jobs-and-careers/jobs"
+ORIGIN_URL = "https://philips.wd3.myworkdayjobs.com"
+REQUEST_TIMEOUT_SECONDS = 30
+DEFAULT_MAX_ATTEMPTS = 1
 PHILIPS_PAGE_SIZE = 20
-PHILIPS_NETHERLANDS_COUNTRY_RE = re.compile(
-    r'"addressCountry"\s*:\s*"(?:Nederland|Netherlands|NL)"',
-    re.IGNORECASE,
-)
-
-PHILIPS_JOB_URL_RE = re.compile(
-    r"^https://philips\.wd3\.myworkdayjobs\.com/"
-    r"(?:[a-z]{2}(?:-[a-z]{2})?/)?jobs-and-careers/job/[^?#]+$",
-    re.IGNORECASE,
-)
+JOB_PATH_PREFIX = "/job/"
 
 
-class PhilipsClientAdapter(BaseClientAdapter):
-    ENTRY_URL = PHILIPS_ENTRY_URL
+@dataclass(frozen=True)
+class PhilipsListingFilters:
+    locale: str = "nl-NL"
+    country_descriptor: str = "Netherlands"
+    location_group_facet_parameter: str = "locationMainGroup"
+    location_facet_parameter: str = "locationHierarchy1"
 
-    def _collect_job_links_in_context(
-        self,
-        context: Any,
-        page: Any,
-        *,
-        job_limit: int,
-    ) -> List[str]:
-        self._open_page(page, self.ENTRY_URL)
-        hrefs = self._collect_links_from_paginated_listing(
-            page,
-            context="philips nl listing",
-            job_limit=job_limit,
-        )
 
-        log(f"philips nl listing: collected {len(hrefs)} unique job links")
-        return sorted(hrefs)
+@dataclass(frozen=True)
+class PhilipsPageState:
+    offset: int
+    country_facet_id: str
 
-    def _open_page(self, page: Any, url: str) -> None:
-        open_and_prepare_page(
-            page,
-            url,
-            wait_for=["a[data-automation-id='jobTitle'][href]"],
-        )
-        log(f"current page url: {page.url}")
 
-    def _is_job_url(self, url: str) -> bool:
-        return bool(PHILIPS_JOB_URL_RE.match(url))
-
-    def _build_job_url(self, external_path: str) -> str:
-        return urljoin(self.ENTRY_URL.rstrip("/") + "/", external_path.lstrip("/"))
-
-    def _is_netherlands_job_page(self, url: str) -> bool:
-        try:
-            with urlopen(url, timeout=30) as response:
-                html = response.read().decode("utf-8", errors="ignore")
-        except Exception:
-            return False
-
-        return bool(PHILIPS_NETHERLANDS_COUNTRY_RE.search(html))
-
-    def _fetch_job_results(
+class PhilipsAPIListingAdapter(APIListingAdapter):
+    def __init__(
         self,
         *,
-        applied_facets: dict[str, list[str]] | None = None,
-        limit: int,
-        offset: int,
-        search_text: str = "",
+        session: requests.Session | None = None,
+        filters: PhilipsListingFilters | None = None,
+        max_attempts: int = DEFAULT_MAX_ATTEMPTS,
+    ) -> None:
+        self._session = session or requests.Session()
+        self._filters = filters or PhilipsListingFilters()
+        self._max_attempts = max_attempts
+
+    def _get_max_attempts(self) -> int:
+        return self._max_attempts
+
+    def _get_initial_request_state(self) -> PhilipsPageState | None:
+        country_facet_id = self._discover_country_facet_id()
+        if not country_facet_id:
+            log(
+                f"{self.__class__.__name__}: "
+                f"{self._filters.country_descriptor} facet not found"
+            )
+            return None
+
+        return PhilipsPageState(offset=0, country_facet_id=country_facet_id)
+
+    def _fetch_listing_response(
+        self,
+        request_state: PhilipsPageState,
     ) -> dict[str, Any]:
-        payload = {
-            "appliedFacets": applied_facets or {},
-            "limit": limit,
-            "offset": offset,
-            "searchText": search_text,
-        }
-        request = Request(
-            PHILIPS_JOBS_API_URL,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Accept": "application/json",
-                "Accept-Language": PHILIPS_API_LOCALE,
-                "Content-Type": "application/json",
-                "Origin": "https://philips.wd3.myworkdayjobs.com",
-                "Referer": self.ENTRY_URL,
-            },
-            method="POST",
+        return self._post_api_request(
+            offset=request_state.offset,
+            country_facet_id=request_state.country_facet_id,
         )
-        with urlopen(request, timeout=30) as response:
-            data = json.loads(response.read().decode("utf-8"))
-        return data if isinstance(data, dict) else {}
 
-    def _discover_netherlands_facet_id(self) -> str | None:
-        results = self._fetch_job_results(limit=1, offset=0)
-        facets = results.get("facets") or []
+    def _parse_listing_response(
+        self,
+        response: dict[str, Any],
+        *,
+        request_state: PhilipsPageState,
+        page_index: int,
+        remaining_job_budget: int,
+    ) -> APIPageResult:
+        raw_job_postings = self._get_job_postings(response_body=response)
+        filtered_job_postings = self._filter_job_postings(
+            job_postings=raw_job_postings,
+        )
+        job_links = self._extract_job_urls(
+            job_postings=filtered_job_postings,
+            limit=remaining_job_budget,
+        )
+
+        raw_total = response.get("total")
+        expected_total = raw_total if isinstance(raw_total, int) and raw_total > 0 else None
+
+        batch_size = len(raw_job_postings)
+        is_last_page = batch_size == 0 or batch_size < PHILIPS_PAGE_SIZE
+        next_request_state = (
+            None
+            if is_last_page
+            else PhilipsPageState(
+                offset=request_state.offset + batch_size,
+                country_facet_id=request_state.country_facet_id,
+            )
+        )
+
+        return APIPageResult(
+            job_links=job_links,
+            next_request_state=next_request_state,
+            expected_total=expected_total,
+            is_last_page=is_last_page,
+        )
+
+    def _post_api_request(
+        self,
+        *,
+        offset: int,
+        country_facet_id: str | None,
+    ) -> dict[str, Any]:
+        response = self._session.post(
+            API_URL,
+            headers=self._build_headers(),
+            json=self._build_payload(
+                offset=offset,
+                country_facet_id=country_facet_id,
+            ),
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+        try:
+            response.raise_for_status()
+        except requests.HTTPError:
+            log(
+                f"{self.__class__.__name__}: request failed "
+                f"status={response.status_code} "
+                f"offset={offset} "
+                f"url={response.url}"
+            )
+            raise
+
+        return response.json()
+
+    def _build_headers(self) -> dict[str, str]:
+        return {
+            "Accept": "application/json",
+            "Accept-Language": self._filters.locale,
+            "Content-Type": "application/json",
+            "Origin": ORIGIN_URL,
+            "Referer": self._build_page_url(),
+        }
+
+    def _build_payload(
+        self,
+        *,
+        offset: int,
+        country_facet_id: str | None,
+    ) -> dict[str, Any]:
+        applied_facets = (
+            {self._filters.location_facet_parameter: [country_facet_id]}
+            if country_facet_id
+            else {}
+        )
+
+        return {
+            "appliedFacets": applied_facets,
+            "limit": PHILIPS_PAGE_SIZE,
+            "offset": offset,
+            "searchText": "",
+        }
+
+    def _build_page_url(self) -> str:
+        return ENTRY_URL
+
+    def _discover_country_facet_id(self) -> str | None:
+        response = self._post_api_request(offset=0, country_facet_id=None)
+        facets = response.get("facets") or []
 
         for facet in facets:
-            if facet.get("facetParameter") != "locationMainGroup":
+            if (
+                facet.get("facetParameter")
+                != self._filters.location_group_facet_parameter
+            ):
                 continue
 
             for group in facet.get("values") or []:
-                if group.get("facetParameter") != "locationHierarchy1":
+                if (
+                    group.get("facetParameter")
+                    != self._filters.location_facet_parameter
+                ):
                     continue
 
                 for value in group.get("values") or []:
-                    descriptor = str(value.get("descriptor") or "").strip()
-                    if descriptor == "Netherlands":
-                        facet_id = value.get("id")
-                        if facet_id:
-                            return str(facet_id)
+                    descriptor = value.get("descriptor")
+                    if not isinstance(descriptor, str):
+                        continue
+
+                    if descriptor.strip() != self._filters.country_descriptor:
+                        continue
+
+                    facet_id = value.get("id")
+                    if facet_id:
+                        return str(facet_id)
 
         return None
 
-    def _collect_job_links_from_page(
+    def _get_job_postings(
         self,
-        results: dict[str, Any],
-        context: str,
         *,
-        job_limit: int,
-    ) -> set[str]:
-        hrefs: set[str] = set()
-        jobs = results.get("jobPostings") or []
-        log(f"{context}: found {len(jobs)} job postings")
+        response_body: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        job_postings = response_body.get("jobPostings") or []
+        return [job_posting for job_posting in job_postings if isinstance(job_posting, dict)]
 
-        for job in jobs:
-            external_path = job.get("externalPath")
-            if not external_path:
-                continue
-
-            full_url = self._build_job_url(str(external_path))
-            if not self._is_job_url(full_url):
-                continue
-
-            if not self._is_netherlands_job_page(full_url):
-                log(f"{context}: skipped non-NL job {full_url}")
-                continue
-
-            hrefs.add(full_url)
-            if len(hrefs) >= job_limit:
-                break
-
-        log(f"{context}: collected {len(hrefs)} job links from current page")
-        return hrefs
-
-    def _collect_links_from_paginated_listing(
+    def _filter_job_postings(
         self,
-        page: Any,
-        context: str,
         *,
-        job_limit: int,
+        job_postings: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        filtered_job_postings: list[dict[str, Any]] = []
+
+        for job_posting in job_postings:
+            external_path = job_posting.get("externalPath")
+            if not isinstance(external_path, str):
+                continue
+
+            if not external_path.startswith(JOB_PATH_PREFIX):
+                continue
+
+            filtered_job_postings.append(job_posting)
+
+        return filtered_job_postings
+
+    def _extract_job_urls(
+        self,
+        *,
+        job_postings: list[dict[str, Any]],
+        limit: int,
     ) -> set[str]:
-        collected_links: set[str] = set()
-        page_index = 1
-        offset = 0
+        urls: set[str] = set()
 
-        facet_id = self._discover_netherlands_facet_id()
-        if not facet_id:
-            log(f"{context}: Netherlands facet not found")
-            return collected_links
+        if limit <= 0:
+            return urls
 
-        while True:
-            requested_limit = min(PHILIPS_PAGE_SIZE, job_limit - len(collected_links))
-            results = self._fetch_job_results(
-                applied_facets={"locationHierarchy1": [facet_id]},
-                limit=requested_limit,
-                offset=offset,
-            )
+        for job_posting in job_postings:
+            external_path = job_posting.get("externalPath")
+            if not isinstance(external_path, str):
+                continue
 
-            job_postings = results.get("jobPostings") or []
-            if not job_postings:
-                log(f"{context}: no results for offset {offset}")
+            urls.add(self._build_job_url(external_path))
+            if len(urls) >= limit:
                 break
 
-            page_links = self._collect_job_links_from_page(
-                results,
-                f"{context} page {page_index}",
-                job_limit=job_limit - len(collected_links),
-            )
+        return urls
 
-            before = len(collected_links)
-            collected_links.update(page_links)
-            after = len(collected_links)
+    def _build_job_url(self, external_path: str) -> str:
+        normalized_path = (
+            external_path if external_path.startswith("/") else f"/{external_path}"
+        )
+        return f"{ENTRY_URL}{normalized_path}"
 
-            log(
-                f"{context} page {page_index}: "
-                f"added {after - before} new links | cumulative={after}"
-            )
 
-            if len(collected_links) >= job_limit:
-                log(f"{context}: reached job limit, stopping")
-                break
-
-            offset += len(job_postings)
-            page_index += 1
-
-            if len(job_postings) < requested_limit:
-                log(f"{context}: reached final results page")
-                break
-
-        return collected_links
+PhilipsClientAdapter = PhilipsAPIListingAdapter
