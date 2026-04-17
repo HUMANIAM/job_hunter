@@ -261,8 +261,8 @@ class ClassifiedTexts(SupportedFieldMixin):
         self.preferred = [value for value in self.preferred if value not in required_set]
 
         has_value = bool(self.required or self.preferred)
-        if has_value and not self.evidence:
-            raise ValueError("evidence must not be empty when classified texts are set")
+        if has_value:
+            self.validate_evidence_not_empty(context="classified texts")
 
         return self
 
@@ -277,10 +277,8 @@ class RequirementTexts(SupportedFieldMixin):
 
     @model_validator(mode="after")
     def validate_supporting_evidence(self) -> "RequirementTexts":
-        if self.required and not self.evidence:
-            raise ValueError(
-                "evidence must not be empty when requirement texts are set"
-            )
+        if self.required:
+            self.validate_evidence_not_empty(context="requirement texts")
         return self
 
 
@@ -308,10 +306,8 @@ class WorkModeConstraints(SupportedFieldMixin):
             or self.remote is not None
             or bool(self.location)
         )
-        if has_value and not self.evidence:
-            raise ValueError(
-                "evidence must not be empty when work mode constraints are set"
-            )
+        if has_value:
+            self.validate_evidence_not_empty(context="work mode constraints")
         return self
 
 
@@ -330,10 +326,8 @@ class MobilityConstraints(SupportedFieldMixin):
             self.travel_required is not None
             or self.driving_license_required is not None
         )
-        if has_value and not self.evidence:
-            raise ValueError(
-                "evidence must not be empty when mobility constraints are set"
-            )
+        if has_value:
+            self.validate_evidence_not_empty(context="mobility constraints")
         return self
 
 
@@ -362,9 +356,9 @@ class LegalAndComplianceConstraints(SupportedFieldMixin):
             or self.background_check_required is not None
             or self.security_clearance_required is not None
         )
-        if has_value and not self.evidence:
-            raise ValueError(
-                "evidence must not be empty when legal and compliance constraints are set"
+        if has_value:
+            self.validate_evidence_not_empty(
+                context="legal and compliance constraints"
             )
         return self
 
