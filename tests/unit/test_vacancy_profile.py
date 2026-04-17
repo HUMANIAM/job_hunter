@@ -3,7 +3,7 @@ import sys
 import pytest
 from pydantic import ValidationError
 
-from clients.job_profiling.profiling.job_profile_model import (
+from clients.job_profiling.profiling.job_profile_schema import (
     Experience,
     Education,
     RoleTitles,

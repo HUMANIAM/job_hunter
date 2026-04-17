@@ -11,11 +11,11 @@ from sqlmodel import Field, SQLModel
 from shared.profiling_model import (
     Education,
     Experience,
-    ForbidExtra,
     RoleTitles,
     StrengthFeature,
     TechnicalExperience,
 )
+from shared.types import ForbidExtra
 
 
 def utc_now() -> datetime:

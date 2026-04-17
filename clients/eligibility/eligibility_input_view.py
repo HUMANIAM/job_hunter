@@ -6,7 +6,7 @@ from clients.candidate_profiling.candidate_profile_schema import (
     CandidateProfile,
     StrengthFeature,
 )
-from clients.job_profiling.profiling.job_profile_model import VacancyProfile
+from clients.job_profiling.profiling.job_profile_schema import VacancyProfile
 
 
 class EligibilityInputView:

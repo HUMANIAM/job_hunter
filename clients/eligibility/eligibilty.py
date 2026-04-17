@@ -9,7 +9,7 @@ from openai import OpenAI
 from clients.candidate_profiling.candidate_profile_schema import CandidateProfile
 from clients.eligibility.eligibility_input_view import EligibilityInputView
 from clients.eligibility.eligibility_response_model import EligibilityResponse
-from clients.job_profiling.profiling.job_profile_model import VacancyProfile
+from clients.job_profiling.profiling.job_profile_schema import VacancyProfile
 from shared.llm import (
     OpenAIStructuredExtractor,
     get_openai_client,
