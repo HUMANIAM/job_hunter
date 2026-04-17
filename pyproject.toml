@@ -10,6 +10,7 @@ requires-python = ">=3.8"
 dependencies = [
     "openai==1.109.1",
     "pydantic>=2.10,<3",
+    "pydantic-settings>=2.7,<3",
     "playwright==1.48.0",
     "python-dotenv>=1.0,<2",
     "psycopg[binary]>=3.2,<4",
