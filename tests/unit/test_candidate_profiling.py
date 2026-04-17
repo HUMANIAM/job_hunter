@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import clients.candidate_profiling.candidate_profiling as candidate_profiling_module
-from clients.candidate_profiling.candidate_profile_model import CandidateProfile
+from clients.candidate_profiling.candidate_profile_schema import CandidateProfile
 
 
 def test_render_candidate_profile_user_message_includes_source_text() -> None:
