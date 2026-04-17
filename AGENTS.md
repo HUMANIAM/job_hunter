@@ -1,5 +1,10 @@
 # Codex Instructions
 
+## Environment Rules
+
+- Never run commands outside `.venv` unless the user explicitly asks for that.
+- Use the `.venv` environment for testing, verification, and run scripts. It is the development environment for this repository.
+
 ## Test Data Rules
 
 - When reusable reference data exists under `tests/**/data/`, use that reference data in tests instead of copying the same literals inline.
