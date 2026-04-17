@@ -9,44 +9,36 @@ SeniorityBand = Literal["junior", "standard", "senior", "lead", "principal"]
 Strength = Literal["core", "strong", "secondary", "exposure"]
 
 
-class SupportedField(BaseModel):
+class ForbidExtra(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+
+class SupportedField(ForbidExtra):
     confidence: float = 0.0
     evidence: List[str] = Field(default_factory=list)
 
 
 class RoleTitles(SupportedField):
-    model_config = ConfigDict(extra="forbid")
-
     primary: str
     alternatives: List[str] = Field(default_factory=list)
 
 
 class Education(SupportedField):
-    model_config = ConfigDict(extra="forbid")
-
     min_level: Optional[str] = None
     accepted_fields: List[str] = Field(default_factory=list)
 
 
 class Experience(SupportedField):
-    model_config = ConfigDict(extra="forbid")
-
     min_years: Optional[int] = None
     seniority_band: Optional[SeniorityBand] = None
 
 
 class StrengthFeature(SupportedField):
-    model_config = ConfigDict(extra="forbid")
-
     name: str
     strength: Strength
 
 
-class TechnicalExperience(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class TechnicalExperience(ForbidExtra):
     technical_core_features: List[StrengthFeature] = Field(default_factory=list)
     technologies: List[StrengthFeature] = Field(default_factory=list)
 
@@ -54,6 +46,7 @@ class TechnicalExperience(BaseModel):
 __all__ = [
     "Education",
     "Experience",
+    "ForbidExtra",
     "RoleTitles",
     "SeniorityBand",
     "Strength",

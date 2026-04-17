@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field as PydanticField
+from pydantic import Field as PydanticField
 from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
@@ -11,6 +11,7 @@ from sqlmodel import Field, SQLModel
 from shared.profiling_model import (
     Education,
     Experience,
+    ForbidExtra,
     RoleTitles,
     StrengthFeature,
     TechnicalExperience,
@@ -21,10 +22,8 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class CandidateProfile(BaseModel):
+class CandidateProfile(ForbidExtra):
     """Business model for a profiled candidate."""
-
-    model_config = ConfigDict(extra="forbid")
 
     role_titles: RoleTitles
     education: Education = PydanticField(default_factory=Education)
