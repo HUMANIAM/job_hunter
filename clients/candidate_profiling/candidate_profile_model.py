@@ -4,7 +4,7 @@ from typing import List
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from shared.profiling import (
+from shared.profiling_schema import (
     Education,
     Experience,
     RoleTitles,
