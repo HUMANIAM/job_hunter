@@ -1,18 +1,11 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Optional
 
-from dotenv import load_dotenv
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import Field, SQLModel, Session, create_engine
 
-from shared.env import require_env_value
-
-ROOT_DIR = Path(__file__).resolve().parent.parent
-ENV_FILE = ROOT_DIR / ".env.postgres"
-
-load_dotenv(ENV_FILE, override=False)
+from core.config import get_settings
 
 
 class Technology(SQLModel, table=True):
@@ -23,9 +16,10 @@ class Technology(SQLModel, table=True):
     normalized_name: str = Field(index=True, unique=True)
 
 
-DATABASE_URL = require_env_value("DATABASE_URL", error_context="PostgreSQL access")
+settings = get_settings()
+DATABASE_URL = settings.DATABASE_URL
 
-engine = create_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
+engine = create_engine(DATABASE_URL, echo=settings.SQLALCHEMY_ECHO, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, class_=Session, expire_on_commit=False)
 
 
