@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from shared.profiling import (
+from shared.profiling_schema import (
     ClassifiedTexts,
     Education,
     Experience,
