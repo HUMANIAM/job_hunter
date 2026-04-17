@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import Field, field_validator
 
 from shared.profiling_schema import (
     Education,
@@ -11,10 +11,9 @@ from shared.profiling_schema import (
     StrengthFeature,
     normalize_feature_list,
 )
+from shared.types import ForbidExtra
 
-class TechnicalExperience(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class TechnicalExperience(ForbidExtra):
     technical_core_features: List[StrengthFeature] = Field(default_factory=list)
     technologies: List[StrengthFeature] = Field(default_factory=list)
 
@@ -31,9 +30,7 @@ class TechnicalExperience(BaseModel):
         return normalize_feature_list(values)
 
 
-class CandidateProfile(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class CandidateProfile(ForbidExtra):
     role_titles: RoleTitles
     education: Education = Field(default_factory=Education)
     experience: Experience = Field(default_factory=Experience)

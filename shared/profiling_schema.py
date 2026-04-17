@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, List, Literal, Optional
+from typing import Any, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from shared.normalizer import (
     dedupe_by_normalized_key,
@@ -10,6 +10,7 @@ from shared.normalizer import (
     normalize_taxonomy_name,
     normalize_text,
 )
+from shared.types import ForbidExtra, SeniorityBand, Strength
 
 
 def _clean_confidence_score(value: Any) -> float:
@@ -92,9 +93,7 @@ def _normalize_text_list(values: List[str]) -> List[str]:
     )
 
 
-class SupportedFieldMixin(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class SupportedFieldMixin(ForbidExtra):
     confidence: float = 0.0
     evidence: List[str] = Field(default_factory=list)
 
@@ -110,8 +109,6 @@ class SupportedFieldMixin(BaseModel):
 
 
 class RoleTitles(SupportedFieldMixin):
-    model_config = ConfigDict(extra="forbid")
-
     primary: str
     alternatives: List[str] = Field(default_factory=list)
     confidence: float
@@ -140,8 +137,6 @@ class RoleTitles(SupportedFieldMixin):
 
 
 class Education(SupportedFieldMixin):
-    model_config = ConfigDict(extra="forbid")
-
     min_level: Optional[str] = None
     accepted_fields: List[str] = Field(default_factory=list)
 
@@ -165,12 +160,7 @@ class Education(SupportedFieldMixin):
         return self
 
 
-SeniorityBand = Literal["junior", "standard", "senior", "lead", "principal"]
-
-
 class Experience(SupportedFieldMixin):
-    model_config = ConfigDict(extra="forbid")
-
     min_years: Optional[int] = None
     seniority_band: Optional[SeniorityBand] = None
 
@@ -194,12 +184,7 @@ class Experience(SupportedFieldMixin):
         return self
 
 
-Strength = Literal["core", "strong", "secondary", "exposure"]
-
-
 class StrengthFeature(SupportedFieldMixin):
-    model_config = ConfigDict(extra="forbid")
-
     name: str
     strength: Strength
 
@@ -226,8 +211,6 @@ def normalize_feature_list(values: List[StrengthFeature]) -> List[StrengthFeatur
 
 
 class ClassifiedTexts(SupportedFieldMixin):
-    model_config = ConfigDict(extra="forbid")
-
     required: List[str] = Field(default_factory=list)
     preferred: List[str] = Field(default_factory=list)
 
@@ -249,8 +232,6 @@ class ClassifiedTexts(SupportedFieldMixin):
 
 
 class RequirementTexts(SupportedFieldMixin):
-    model_config = ConfigDict(extra="forbid")
-
     required: List[str] = Field(default_factory=list)
 
     @field_validator("required", mode="after")
@@ -268,8 +249,6 @@ class RequirementTexts(SupportedFieldMixin):
 
 
 class WorkModeConstraints(SupportedFieldMixin):
-    model_config = ConfigDict(extra="forbid")
-
     onsite: Optional[bool] = None
     hybrid: Optional[bool] = None
     remote: Optional[bool] = None
@@ -301,8 +280,6 @@ class WorkModeConstraints(SupportedFieldMixin):
 
 
 class MobilityConstraints(SupportedFieldMixin):
-    model_config = ConfigDict(extra="forbid")
-
     travel_required: Optional[bool] = None
     driving_license_required: Optional[bool] = None
 
@@ -325,8 +302,6 @@ class MobilityConstraints(SupportedFieldMixin):
 
 
 class LegalAndComplianceConstraints(SupportedFieldMixin):
-    model_config = ConfigDict(extra="forbid")
-
     work_authorization_required: Optional[bool] = None
     export_control_required: Optional[bool] = None
     background_check_required: Optional[bool] = None
@@ -370,7 +345,6 @@ __all__ = [
     "Strength",
     "StrengthFeature",
     "SupportedFieldMixin",
-    "TechnicalExperience",
     "WorkModeConstraints",
     "normalize_feature_list",
 ]

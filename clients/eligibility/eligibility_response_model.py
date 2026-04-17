@@ -4,13 +4,13 @@ from typing import List, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from shared.types import ForbidExtra
+
 EligibilityDecision = Literal["eligible", "uncertain", "not_eligible"]
 FieldDecision = Literal["match", "partial", "mismatch", "unknown"]
 
 
-class FieldAssessment(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class FieldAssessment(ForbidExtra):
     field: Literal[
         "role_titles",
         "education",
@@ -24,9 +24,7 @@ class FieldAssessment(BaseModel):
     evidence: List[str] = Field(default_factory=list)
 
 
-class EligibilityResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class EligibilityResponse(ForbidExtra):
     eligibility_score: float = Field(ge=0.0, le=1.0)
     decision: EligibilityDecision
     blocker_reasons: List[str] = Field(default_factory=list)

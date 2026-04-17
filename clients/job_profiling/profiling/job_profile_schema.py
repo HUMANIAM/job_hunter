@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from shared.profiling_schema import (
     ClassifiedTexts,
@@ -12,18 +12,15 @@ from shared.profiling_schema import (
     RoleTitles,
     WorkModeConstraints,
 )
+from shared.types import ForbidExtra
 
 
-class TechnicalExperience(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class TechnicalExperience(ForbidExtra):
     technical_core_features: ClassifiedTexts = Field(default_factory=ClassifiedTexts)
     technologies: ClassifiedTexts = Field(default_factory=ClassifiedTexts)
 
 
-class VacancyProfile(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class VacancyProfile(ForbidExtra):
     role_titles: RoleTitles
     education: Education = Field(default_factory=Education)
     experience: Experience = Field(default_factory=Experience)
