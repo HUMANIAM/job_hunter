@@ -37,6 +37,33 @@ Run a syntax check:
 .venv/bin/python -m py_compile app/job_hunter.py
 ```
 
+## Local PostgreSQL
+
+Start the local PostgreSQL service:
+
+```bash
+docker compose up -d postgres
+```
+
+The service reads its local development settings from `.env.postgres`:
+
+- `POSTGRES_HOST`
+- `POSTGRES_PORT`
+- `POSTGRES_DB`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `DATABASE_URL`
+
+The Python database wiring lives under `storage/`.
+
+The PostgreSQL container data is stored in the Docker volume `job_hunter_postgres_data`.
+
+Run the CRUD verification:
+
+```bash
+.venv/bin/python scripts/verify_postgres_crud.py
+```
+
 ## Usage
 
 Run the single project entrypoint:
