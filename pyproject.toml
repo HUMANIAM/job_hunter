@@ -11,6 +11,10 @@ dependencies = [
     "openai==1.109.1",
     "pydantic>=2.10,<3",
     "playwright==1.48.0",
+    "python-dotenv>=1.0,<2",
+    "psycopg[binary]>=3.2,<4",
+    "sqlalchemy>=2.0,<3",
+    "sqlmodel>=0.0.24,<0.1",
 ]
 
 [project.optional-dependencies]
