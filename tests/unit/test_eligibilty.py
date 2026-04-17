@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from clients.candidate_profiling.candidate_profile_schema import CandidateProfile
+from clients.candidate_profiling.candidate_profile_llm_schema import CandidateProfile
 from clients.eligibility import eligibilty as eligibilty_module
 from clients.eligibility.eligibility_response_model import EligibilityResponse
 from clients.job_profiling.profiling.job_profile_schema import VacancyProfile

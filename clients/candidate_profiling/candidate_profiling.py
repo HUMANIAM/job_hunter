@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from clients.candidate_profiling.candidate_profile_schema import CandidateProfile
+from clients.candidate_profiling.candidate_profile_llm_schema import CandidateProfile
 from clients.profiling import extract_profile
 from shared.llm import load_text_file, render_template
 

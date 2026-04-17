@@ -12,7 +12,7 @@ if __package__ in {None, ""}:
         "Run this CLI as a module: python -m clients.eligibility.eligibility_cli ..."
     )
 
-from clients.candidate_profiling.candidate_profile_schema import CandidateProfile
+from clients.candidate_profiling.candidate_profile_llm_schema import CandidateProfile
 from clients.eligibility.eligibility_response_model import EligibilityResponse
 from clients.eligibility.eligibilty import evaluate_eligibility
 from clients.job_profiling.profiling.job_profile_schema import VacancyProfile

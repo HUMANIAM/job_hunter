@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import Any, List, Optional, TypeVar, Generic
 
 from pydantic import Field, field_validator, model_validator
 
@@ -107,8 +107,12 @@ class SupportedFieldMixin(ForbidExtra):
     def validate_evidence(cls, values: List[str]) -> List[str]:
         return normalize_and_dedupe_texts(values)
 
+    def validate_evidence_not_empty(self, *, context: str) -> None:
+        if not self.evidence:
+            raise ValueError(f"evidence must not be empty when {context} are set")
 
-class RoleTitles(SupportedFieldMixin):
+
+class RoleTitlesBase(ForbidExtra):
     primary: str
     alternatives: List[str] = Field(default_factory=list)
     confidence: float
@@ -128,15 +132,19 @@ class RoleTitles(SupportedFieldMixin):
             if title != primary
         ][:5]
 
-        if not self.evidence:
-            raise ValueError("evidence must not be empty")
-
         self.primary = primary
         self.alternatives = alternatives
         return self
 
 
-class Education(SupportedFieldMixin):
+class RoleTitles(RoleTitlesBase, SupportedFieldMixin):
+    @model_validator(mode="after")
+    def validate_supported_role_titles(self) -> "RoleTitles":
+        self.validate_evidence_not_empty(context="role titles")
+        return self
+
+
+class EducationBase(ForbidExtra):
     min_level: Optional[str] = None
     accepted_fields: List[str] = Field(default_factory=list)
 
@@ -150,17 +158,18 @@ class Education(SupportedFieldMixin):
     def validate_accepted_fields(cls, values: List[str]) -> List[str]:
         return _normalize_text_list(values)
 
+
+class Education(EducationBase, SupportedFieldMixin):
     @model_validator(mode="after")
-    def validate_supporting_evidence(self) -> "Education":
+    def validate_supported_education(self) -> "Education":
         has_value = self.min_level is not None or bool(self.accepted_fields)
-        if has_value and not self.evidence:
-            raise ValueError(
-                "evidence must not be empty when education requirements are set"
-            )
+        if has_value:
+            self.validate_evidence_not_empty(context="education requirements")
+
         return self
 
 
-class Experience(SupportedFieldMixin):
+class ExperienceBase(ForbidExtra):
     min_years: Optional[int] = None
     seniority_band: Optional[SeniorityBand] = None
 
@@ -174,17 +183,17 @@ class Experience(SupportedFieldMixin):
     def validate_seniority_band(cls, value: Any) -> Optional[SeniorityBand]:
         return _normalize_optional_text(value)
 
+
+class Experience(ExperienceBase, SupportedFieldMixin):
     @model_validator(mode="after")
-    def validate_supporting_evidence(self) -> "Experience":
+    def validate_supported_experience(self) -> "Experience":
         has_value = self.min_years is not None or self.seniority_band is not None
-        if has_value and not self.evidence:
-            raise ValueError(
-                "evidence must not be empty when experience requirements are set"
-            )
+        if has_value:
+            self.validate_evidence_not_empty(context="experience requirements")
         return self
 
 
-class StrengthFeature(SupportedFieldMixin):
+class StrengthFeatureBase(ForbidExtra):
     name: str
     strength: Strength
 
@@ -196,11 +205,38 @@ class StrengthFeature(SupportedFieldMixin):
             raise ValueError("name must not be empty")
         return normalized
 
+
+class StrengthFeature(StrengthFeatureBase, SupportedFieldMixin):
     @model_validator(mode="after")
-    def validate_supporting_evidence(self) -> "StrengthFeature":
-        if not self.evidence:
-            raise ValueError("evidence must not be empty")
+    def validate_supported_strength_feature(self) -> "StrengthFeature":
+        self.validate_evidence_not_empty(context="strength features")
         return self
+
+FeatureT = TypeVar("FeatureT", bound="StrengthFeatureBase")
+
+class _TechnicalExperienceFields(ForbidExtra, Generic[FeatureT]):
+    technical_core_features: List[FeatureT] = Field(default_factory=list)
+    technologies: List[FeatureT] = Field(default_factory=list)
+
+    @field_validator(
+        "technical_core_features",
+        "technologies",
+        mode="after",
+    )
+    @classmethod
+    def validate_feature_lists(
+        cls,
+        values: List[StrengthFeature],
+    ) -> List[StrengthFeature]:
+        return normalize_feature_list(values)
+
+
+class TechnicalExperienceBase(_TechnicalExperienceFields[StrengthFeatureBase]):
+    pass
+
+
+class TechnicalExperience(_TechnicalExperienceFields[StrengthFeature]):
+    pass
 
 
 def normalize_feature_list(values: List[StrengthFeature]) -> List[StrengthFeature]:
@@ -345,6 +381,7 @@ __all__ = [
     "Strength",
     "StrengthFeature",
     "SupportedFieldMixin",
+    "TechnicalExperience",
     "WorkModeConstraints",
     "normalize_feature_list",
 ]

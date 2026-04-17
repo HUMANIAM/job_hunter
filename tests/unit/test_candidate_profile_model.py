@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from clients.candidate_profiling.candidate_profile_schema import CandidateProfile
+from clients.candidate_profiling.candidate_profile_llm_schema import CandidateProfile
 
 
 def test_candidate_profile_normalizes_shared_sections() -> None:
