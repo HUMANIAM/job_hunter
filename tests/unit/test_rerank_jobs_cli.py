@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from app import rerank_jobs
+from app_job_hunter_ref import rerank_jobs
 
 
 def _candidate_profile_payload(candidate_id: str = "Ibrahim_Saad_CV") -> dict[str, object]:

@@ -11,6 +11,7 @@ def get_engine():
     return create_engine(
         settings.DATABASE_URL,
         echo=settings.SQLALCHEMY_ECHO,
+        pool_pre_ping=True,  # dead pooled connections get detected before use.
     )
 
 

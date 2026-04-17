@@ -20,7 +20,7 @@ from typing import Any, Sequence
 if __package__ in {None, ""}:
     raise SystemExit("Run this CLI as a module: python -m app.rerank_jobs ...")
 
-from app import job_hunter_core
+from app_job_hunter_ref import job_hunter_core
 from infra.logging import log
 from ranking.service import rank_job
 from reporting import writer as report_writer
