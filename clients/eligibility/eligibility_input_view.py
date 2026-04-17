@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from clients.candidate_profiling.candidate_profile_model import (
+from clients.candidate_profiling.candidate_profile_schema import (
     CandidateProfile,
     StrengthFeature,
 )

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from clients.candidate_profiling.candidate_profile_model import CandidateProfile
+from clients.candidate_profiling.candidate_profile_schema import CandidateProfile
 from clients.eligibility.eligibility_input_view import EligibilityInputView
 from clients.job_profiling.profiling.job_profile_model import VacancyProfile
 
