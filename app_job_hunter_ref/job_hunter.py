@@ -31,7 +31,7 @@ if __package__ in {None, ""}:
 
 from playwright.sync_api import sync_playwright
 
-from app import job_hunter_core
+from app_job_hunter_ref import job_hunter_core
 from candidate_profile.profile import (
     CandidateProfileDocument,
     compute_source_text_hash,

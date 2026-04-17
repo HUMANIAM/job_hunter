@@ -21,7 +21,7 @@ if "playwright.sync_api" not in sys.modules:
     sys.modules["playwright"] = playwright
     sys.modules["playwright.sync_api"] = sync_api
 
-from app import job_hunter
+from app_job_hunter_ref import job_hunter
 from sources.base import SourceDefinition, SourceRetrievalResult
 
 

@@ -8,7 +8,7 @@ from core.config import get_settings
 from core.constants import JOB_HUNTER_API_TITLE as APP_TITLE
 from core.exception_handlers import register_exception_handlers
 from core.logging import setup_logging
-from storage.postgres import create_db_and_tables
+from infra.db import create_db_and_tables
 from clients.health import router as health_router
 
 logger = logging.getLogger(__name__)

@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     BACKEND_BASE_URL: str = "http://localhost:8000"
     FRONTEND_BASE_URL: str = "http://localhost:5173"
 
+    LOG_LEVEL: str = "INFO"
     DATABASE_URL: str = ""
     SQLALCHEMY_ECHO: bool = False
 

@@ -11,7 +11,7 @@ if __package__ in {None, ""}:
         "Run this CLI as a module: python -m eligibility.job_eligibility_view_cli ..."
     )
 
-from app import job_hunter_core
+from app_job_hunter_ref import job_hunter_core
 from eligibility.job_eligibility_view import (
     extract_job_eligibility_view,
     get_default_job_eligibility_view_extractor,
