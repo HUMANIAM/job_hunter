@@ -15,7 +15,7 @@ if __package__ in {None, ""}:
 from clients.candidate_profiling.candidate_profile_schema import CandidateProfile
 from clients.eligibility.eligibility_response_model import EligibilityResponse
 from clients.eligibility.eligibilty import evaluate_eligibility
-from clients.job_profiling.profiling.job_profile_model import VacancyProfile
+from clients.job_profiling.profiling.job_profile_schema import VacancyProfile
 from infra import json_io
 from infra.logging import log
 from shared.cli import positive_int_arg

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import clients.job_profiling.profiling.profiling as vacancy_profiler_module
 import clients.profiling.profiling as shared_profiler_module
-from clients.job_profiling.profiling.job_profile_model import VacancyProfile
+from clients.job_profiling.profiling.job_profile_schema import VacancyProfile
 
 
 def test_profile_extractor_system_message_composes_common_rules() -> None:

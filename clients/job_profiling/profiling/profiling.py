@@ -3,7 +3,7 @@ from __future__ import annotations
 from clients.job_profiling.profiling.job_profile_user_message import (
     render_job_profile_user_message,
 )
-from clients.job_profiling.profiling.job_profile_model import VacancyProfile
+from clients.job_profiling.profiling.job_profile_schema import VacancyProfile
 from clients.profiling import extract_profile
 
 
