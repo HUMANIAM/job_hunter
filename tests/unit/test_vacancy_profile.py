@@ -128,7 +128,10 @@ def test_experience_rejects_unknown_seniority_band() -> None:
 
 
 def test_vacancy_profile_requires_role_titles_supporting_fields() -> None:
-    with pytest.raises(ValidationError, match="Field required"):
+    with pytest.raises(
+        ValidationError,
+        match="evidence must not be empty when role titles are set",
+    ):
         VacancyProfile.model_validate(
             {
                 "role_titles": {

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, List, Optional, TypeVar, Generic
+from typing import Any, Generic, List, Optional, TypeVar
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AfterValidator, Field, field_validator, model_validator
+from typing_extensions import Annotated
 
 from shared.normalizer import (
     dedupe_by_normalized_key,
@@ -115,8 +116,6 @@ class SupportedFieldMixin(ForbidExtra):
 class RoleTitlesBase(ForbidExtra):
     primary: str
     alternatives: List[str] = Field(default_factory=list)
-    confidence: float
-    evidence: List[str]
 
     @model_validator(mode="after")
     def validate_titles(self) -> "RoleTitles":
@@ -212,7 +211,25 @@ class StrengthFeature(StrengthFeatureBase, SupportedFieldMixin):
         self.validate_evidence_not_empty(context="strength features")
         return self
 
+
 FeatureT = TypeVar("FeatureT", bound="StrengthFeatureBase")
+
+
+def normalize_feature_list(values: List[FeatureT]) -> List[FeatureT]:
+    return dedupe_by_normalized_key(
+        values,
+        key_selector=lambda item: item.name,
+    )
+
+
+StrengthFeatureListBase = Annotated[
+    List[StrengthFeatureBase],
+    AfterValidator(normalize_feature_list),
+]
+StrengthFeatureList = Annotated[
+    List[StrengthFeature],
+    AfterValidator(normalize_feature_list),
+]
 
 class _TechnicalExperienceFields(ForbidExtra, Generic[FeatureT]):
     technical_core_features: List[FeatureT] = Field(default_factory=list)
@@ -237,13 +254,6 @@ class TechnicalExperienceBase(_TechnicalExperienceFields[StrengthFeatureBase]):
 
 class TechnicalExperience(_TechnicalExperienceFields[StrengthFeature]):
     pass
-
-
-def normalize_feature_list(values: List[StrengthFeature]) -> List[StrengthFeature]:
-    return dedupe_by_normalized_key(
-        values,
-        key_selector=lambda item: item.name,
-    )
 
 
 class ClassifiedTexts(SupportedFieldMixin):
@@ -374,6 +384,8 @@ __all__ = [
     "SeniorityBand",
     "Strength",
     "StrengthFeature",
+    "StrengthFeatureList",
+    "StrengthFeatureListBase",
     "SupportedFieldMixin",
     "TechnicalExperience",
     "WorkModeConstraints",
