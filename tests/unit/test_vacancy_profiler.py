@@ -104,6 +104,52 @@ def test_extract_profile_returns_structured_profile() -> None:
     ]
 
 
+def test_extract_profile_uses_shared_openai_client_helper(monkeypatch) -> None:
+    expected_client = object()
+    captured_contexts: list[str] = []
+
+    class FakeExtractor:
+        def __init__(self, **kwargs: object) -> None:
+            assert kwargs["client"] is expected_client
+            self._response_format = kwargs["response_format"]
+
+        def extract(self, _: object) -> VacancyProfile:
+            return self._response_format.model_validate(
+                {
+                    "role_titles": {
+                        "primary": "mechatronics technician",
+                        "alternatives": [],
+                        "confidence": 0.96,
+                        "evidence": ["h1: Mechatronics Technician"],
+                    }
+                }
+            )
+
+    def fake_get_openai_client(*, error_context: str) -> object:
+        captured_contexts.append(error_context)
+        return expected_client
+
+    monkeypatch.setattr(
+        shared_profiler_module,
+        "get_openai_client",
+        fake_get_openai_client,
+    )
+    monkeypatch.setattr(
+        shared_profiler_module,
+        "OpenAIStructuredExtractor",
+        FakeExtractor,
+    )
+
+    profile = shared_profiler_module.extract_profile(
+        "h1: Mechatronics Technician",
+        profile_model=VacancyProfile,
+        profile_llm_user_message="rendered user message",
+    )
+
+    assert profile.role_titles.primary == "mechatronics technician"
+    assert captured_contexts == ["Profile extraction"]
+
+
 def test_profile_vacancy_text_delegates_to_shared_extractor(monkeypatch) -> None:
     extracted_messages: list[dict[str, object]] = []
     expected_profile = VacancyProfile.model_validate(
