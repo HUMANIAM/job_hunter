@@ -8,8 +8,12 @@ from typing import TypeVar
 from openai import OpenAI
 from pydantic import BaseModel
 
-from shared.env import require_env_value
-from shared.llm import OpenAIStructuredExtractor, load_text_file, render_template
+from shared.llm import (
+    OpenAIStructuredExtractor,
+    get_openai_client,
+    load_text_file,
+    render_template,
+)
 
 ProfileModelT = TypeVar("ProfileModelT", bound=BaseModel)
 
@@ -53,15 +57,6 @@ def _render_extractor_user_message(payload: _ProfileExtractionPayload) -> str:
     return payload.profile_llm_user_message
 
 
-@lru_cache(maxsize=1)
-def _get_openai_client() -> OpenAI:
-    api_key = require_env_value(
-        "OPENAI_API_KEY",
-        error_context="Profile extraction",
-    )
-    return OpenAI(api_key=api_key)
-
-
 def extract_profile(
     source_text: str,
     *,
@@ -73,7 +68,7 @@ def extract_profile(
     timeout_seconds: float = PROFILE_TIMEOUT_SECONDS,
 ) -> ProfileModelT:
     extractor = OpenAIStructuredExtractor(
-        client=client or _get_openai_client(),
+        client=client or get_openai_client(error_context="Profile extraction"),
         model=model,
         response_format=profile_model,
         system_message=_load_system_message(),
