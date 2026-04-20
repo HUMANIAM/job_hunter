@@ -37,3 +37,20 @@ class StorageError(Exception):
     def __str__(self) -> str:
         detail = f": {self.detail}" if self.detail else ""
         return f"storage error during {self.operation}{detail}"
+    
+
+@dataclass(frozen=True)
+class NotFoundError(Exception):
+    """Raised when a requested resource does not exist."""
+
+    resource: str
+    lookup_field: str
+    lookup_value: object
+    operation: Optional[str] = None
+
+    def __str__(self) -> str:
+        prefix = f"{self.operation}: " if self.operation else ""
+        return (
+            f"{prefix}{self.resource} not found for "
+            f"{self.lookup_field}={repr(self.lookup_value)}"
+        )
