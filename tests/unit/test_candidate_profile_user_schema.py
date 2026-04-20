@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from clients.candidate_profiling.candidate_profile_schema import (
     CandidateProfileUpdate,
 )
@@ -49,3 +52,11 @@ def test_candidate_profile_user_schema_normalizes_feature_lists() -> None:
     assert [(item.name, item.strength) for item in profile.domain_background] == [
         ("semiconductor", "strong"),
     ]
+
+
+def test_candidate_profile_user_schema_requires_at_least_one_update() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="at least one field must be provided for update",
+    ):
+        CandidateProfileUpdate.model_validate({})
