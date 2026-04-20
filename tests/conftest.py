@@ -2,16 +2,18 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Callable, List
+from typing import List
+from uuid import uuid4
 
 import pytest
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy.engine import make_url
+from pytest_postgresql import factories
 from sqlmodel import Session, SQLModel, create_engine
-from clients.candidate_profiling.candidate_profiling_model import CandidateProfileRecord
+
 from clients.candidate_profiling.candidate_route import router as candidate_router
 from infra.db import get_session
-from tests.data.candidate import make_candidate_profile_endpoint_record
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -22,6 +24,21 @@ from clients.health import router as health_router
 from core.config import get_settings
 from core.constants import JOB_HUNTER_API_TITLE
 from core.exception_handlers import register_exception_handlers
+
+settings = get_settings()
+database_url = make_url(settings.DATABASE_URL)
+if database_url.get_backend_name() != "postgresql":
+    raise RuntimeError("Integration tests require a PostgreSQL DATABASE_URL")
+
+postgresql_noproc = factories.postgresql_noproc(
+    host=database_url.host,
+    port=database_url.port,
+    user=database_url.username,
+    password=database_url.password,
+    dbname=f"{database_url.database}_pytest_{uuid4().hex}",
+)
+postgresql = factories.postgresql("postgresql_noproc")
+
 
 def create_mock_app(session: Session, routers: List[APIRouter]) -> FastAPI:
     """
@@ -48,15 +65,25 @@ def create_mock_app(session: Session, routers: List[APIRouter]) -> FastAPI:
     return test_app
 
 
-@pytest.fixture(scope="session")
-def engine():
-    settings = get_settings()
-    engine = create_engine(
-        settings.DATABASE_URL,
+@pytest.fixture
+def engine(postgresql):
+    test_engine = create_engine(
+        database_url.set(
+            drivername="postgresql+psycopg",
+            database=postgresql.info.dbname,
+            username=postgresql.info.user,
+            password=postgresql.info.password,
+            host=postgresql.info.host,
+            port=postgresql.info.port,
+        ),
         echo=False,
     )
-    SQLModel.metadata.create_all(engine)
-    return engine
+    SQLModel.metadata.create_all(test_engine)
+    try:
+        yield test_engine
+    finally:
+        SQLModel.metadata.drop_all(test_engine)
+        test_engine.dispose()
 
 
 @pytest.fixture
