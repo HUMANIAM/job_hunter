@@ -1,4 +1,4 @@
-from typing import Optional, TypeVar
+from typing import NoReturn, Optional, TypeVar
 
 from core.errors import NotFoundError
 
@@ -21,3 +21,7 @@ def ensure_found(
             operation=operation,
         )
     return value
+
+
+def raise_no_updates() -> NoReturn:
+    raise ValueError("at least one field must be provided for update")
