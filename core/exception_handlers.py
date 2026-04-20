@@ -1,7 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from core.errors import IntegrityViolationError, StorageError
+from core.errors import IntegrityViolationError, NotFoundError, StorageError
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -43,4 +43,14 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "error": "storage_error",
                 "message": "An unexpected storage error occurred.",
             },
+        )
+
+    @app.exception_handler(NotFoundError)
+    def _handle_not_found_error(
+        _request: Request,
+        exc: NotFoundError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=404,
+            content={"detail": str(exc)},
         )

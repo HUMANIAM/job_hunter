@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from clients.candidate_profiling.candidate_profiling_model import CandidateProfile
-from tests.unit.clients.data.candidate import make_candidate_profile
+from tests.data.candidate import make_candidate_profile
 
 
 def test_candidate_profile_rejects_unknown_technical_experience_fields() -> None:
