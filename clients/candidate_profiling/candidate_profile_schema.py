@@ -57,7 +57,17 @@ class CandidateProfileUpdate(ForbidExtra):
         return self
 
 
+class CandidateProfileCreate(ForbidExtra):
+    role_titles: RoleTitlesBase
+    education: EducationBase
+    experience: ExperienceBase
+    technical_experience: TechnicalExperienceBase
+    languages: StrengthFeatureListBase
+    domain_background: StrengthFeatureListBase
+
+
 __all__ = [
+    "CandidateProfileCreate",
     "CandidateProfileRead",
     "CandidateProfileUpdate",
 ]

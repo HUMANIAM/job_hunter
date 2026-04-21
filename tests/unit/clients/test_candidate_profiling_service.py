@@ -3,8 +3,60 @@ from __future__ import annotations
 from unittest.mock import Mock
 
 from clients.candidate_profiling import candidate_service
-from clients.candidate_profiling.candidate_profile_schema import CandidateProfileUpdate
+from clients.candidate_profiling.candidate_profile_schema import (
+    CandidateProfileCreate,
+    CandidateProfileUpdate,
+)
 from tests.data.candidate import make_candidate_profile, make_candidate_profile_record
+
+
+def test_create_candidate_profile_uses_mapper_before_repo_create(
+    mock_session: Mock,
+    monkeypatch,
+) -> None:
+    uploaded_cv_id = 42
+    created_record = make_candidate_profile_record(uploaded_cv_id=uploaded_cv_id)
+
+    repo = Mock()
+    repo.create.return_value = created_record
+    monkeypatch.setattr(
+        candidate_service,
+        "CandidateProfileRepository",
+        lambda: repo,
+    )
+
+    mapped_profile = make_candidate_profile(primary_role_title="data engineer")
+    mapper = Mock(return_value=mapped_profile)
+    monkeypatch.setattr(candidate_service, "map_candidate_profile_create", mapper)
+
+    expected_read_schema = object()
+    read_schema_mapper = Mock(return_value=expected_read_schema)
+    monkeypatch.setattr(candidate_service, "_to_read_schema", read_schema_mapper)
+
+    payload = CandidateProfileCreate(
+        role_titles={"primary": "data engineer"},
+        education={},
+        experience={},
+        technical_experience={},
+        languages=[],
+        domain_background=[],
+    )
+
+    result = candidate_service.create_candidate_profile(
+        uploaded_cv_id=uploaded_cv_id,
+        profile_create=payload,
+        session=mock_session,
+    )
+
+    assert result is expected_read_schema
+    mapper.assert_called_once_with(payload)
+    repo.create.assert_called_once_with(
+        session=mock_session,
+        uploaded_cv_id=uploaded_cv_id,
+        profile=mapped_profile,
+        commit=True,
+    )
+    read_schema_mapper.assert_called_once_with(created_record)
 
 
 def test_update_candidate_profile_uses_mapper_before_repo_update(
