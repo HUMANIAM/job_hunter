@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from clients.candidate_profiling.candidate_profile_schema import (
+    CandidateProfileCreate,
     CandidateProfileRead,
     CandidateProfileUpdate,
 )
@@ -123,6 +124,17 @@ def map_candidate_profile_update(
         technical_experience=technical_experience,
         languages=languages,
         domain_background=domain_background,
+    )
+
+
+def map_candidate_profile_create(value: CandidateProfileCreate) -> CandidateProfile:
+    return CandidateProfile(
+        role_titles=_map_role_titles(value.role_titles),
+        education=_map_education(value.education),
+        experience=_map_experience(value.experience),
+        technical_experience=_map_technical_experience(value.technical_experience),
+        languages=_map_strength_features(value.languages),
+        domain_background=_map_strength_features(value.domain_background),
     )
 
 

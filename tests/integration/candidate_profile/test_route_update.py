@@ -48,7 +48,7 @@ def test_update_candidate_profile_persists_and_returns_mapped_data(client) -> No
         "domain_background": expected_existing_domain_background,
     }
 
-    response = client.put(f"/candidate-profiles/{uploaded_cv_id}", json=payload)
+    response = client.patch(f"/candidate-profiles/{uploaded_cv_id}", json=payload)
 
     assert response.status_code == 200
     assert response.json() == expected_response
@@ -86,7 +86,7 @@ def test_update_candidate_profile_rejects_empty_payload(client) -> None:
     original_record_id = persisted_record.id
     original_role_titles = deepcopy(persisted_record.role_titles_json)
 
-    response = client.put(f"/candidate-profiles/{uploaded_cv_id}", json={})
+    response = client.patch(f"/candidate-profiles/{uploaded_cv_id}", json={})
 
     assert response.status_code == 422
     assert "at least one field must be provided for update" in str(response.json())
