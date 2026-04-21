@@ -60,3 +60,29 @@ def update_candidate_profile(
     )
 
     return _to_read_schema(updated_record)
+
+
+def delete_candidate_profile(
+    uploaded_cv_id: int,
+    session: Session,
+) -> CandidateProfileRead:
+    repo = CandidateProfileRepository()
+    record = repo.get_by_uploaded_cv_id(
+        session=session,
+        uploaded_cv_id=uploaded_cv_id,
+    )
+    record = ensure_found(
+        record,
+        resource="Candidate profile",
+        lookup_field="uploaded_cv_id",
+        lookup_value=uploaded_cv_id,
+        operation="delete",
+    )
+
+    deleted_record = repo.delete(
+        session=session,
+        record=record,
+        commit=True,
+    )
+
+    return _to_read_schema(deleted_record)

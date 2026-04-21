@@ -56,3 +56,41 @@ def test_update_candidate_profile_uses_mapper_before_repo_update(
         commit=True,
     )
     read_schema_mapper.assert_called_once_with(updated_record)
+
+
+def test_delete_candidate_profile_deletes_record_and_maps_response(
+    mock_session: Mock,
+    monkeypatch,
+) -> None:
+    uploaded_cv_id = 42
+    existing_record = make_candidate_profile_record(uploaded_cv_id=uploaded_cv_id)
+
+    repo = Mock()
+    repo.get_by_uploaded_cv_id.return_value = existing_record
+    repo.delete.return_value = existing_record
+    monkeypatch.setattr(
+        candidate_service,
+        "CandidateProfileRepository",
+        lambda: repo,
+    )
+
+    expected_read_schema = object()
+    read_schema_mapper = Mock(return_value=expected_read_schema)
+    monkeypatch.setattr(candidate_service, "_to_read_schema", read_schema_mapper)
+
+    result = candidate_service.delete_candidate_profile(
+        uploaded_cv_id=uploaded_cv_id,
+        session=mock_session,
+    )
+
+    assert result is expected_read_schema
+    repo.get_by_uploaded_cv_id.assert_called_once_with(
+        session=mock_session,
+        uploaded_cv_id=uploaded_cv_id,
+    )
+    repo.delete.assert_called_once_with(
+        session=mock_session,
+        record=existing_record,
+        commit=True,
+    )
+    read_schema_mapper.assert_called_once_with(existing_record)

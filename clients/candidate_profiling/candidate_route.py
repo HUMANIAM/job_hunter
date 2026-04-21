@@ -44,3 +44,19 @@ def update_candidate_profile(
         session=session,
     )
     return record
+
+
+@router.delete(
+    "/{uploaded_cv_id}",
+    response_model=CandidateProfileRead,
+    status_code=status.HTTP_200_OK,
+)
+def delete_candidate_profile(
+    uploaded_cv_id: int,
+    session: Session = Depends(get_session),
+) -> CandidateProfileRead:
+    record = service.delete_candidate_profile(
+        uploaded_cv_id=uploaded_cv_id,
+        session=session,
+    )
+    return record
