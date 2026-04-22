@@ -1,36 +1,6 @@
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-
 from streamlit.testing.v1 import AppTest
-
-
-def _load_home_page_module(monkeypatch) -> object:
-    module_path = Path(__file__).resolve().parents[1] / "pages" / "home.py"
-    project_root = module_path.parents[2]
-    filtered_sys_path = [
-        entry
-        for entry in sys.path
-        if Path(entry or ".").resolve() != project_root
-    ]
-    monkeypatch.setattr(sys, "path", [str(module_path.parent), *filtered_sys_path])
-
-    for name in tuple(sys.modules):
-        if name == "ui" or name.startswith("ui."):
-            sys.modules.pop(name)
-
-    spec = importlib.util.spec_from_file_location(
-        "streamlit_home_page_script",
-        module_path,
-    )
-    assert spec is not None
-    assert spec.loader is not None
-
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def _make_supported_profile(profile_id: int):
@@ -54,14 +24,7 @@ def _make_supported_profile(profile_id: int):
     return map_candidate_profile(payload)
 
 
-def test_home_script_bootstraps_project_root_for_ui_imports(monkeypatch) -> None:
-    module = _load_home_page_module(monkeypatch)
-
-    assert str(Path(__file__).resolve().parents[2]) in sys.path
-    assert callable(module.get_candidate_profile_service)
-
-
-def test_home_page_renders_candidate_profile_from_file(monkeypatch) -> None:
+def test_app_entrypoint_renders_home_page_from_file(monkeypatch) -> None:
     from ui.candidate.service import CandidateProfileService
 
     def fake_get_profile(self, profile_id: int):
@@ -69,7 +32,7 @@ def test_home_page_renders_candidate_profile_from_file(monkeypatch) -> None:
 
     monkeypatch.setattr(CandidateProfileService, "get_profile", fake_get_profile)
 
-    app = AppTest.from_file("ui/pages/home.py")
+    app = AppTest.from_file("ui/app.py")
 
     app.run(timeout=5)
 

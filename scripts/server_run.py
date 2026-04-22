@@ -12,10 +12,6 @@ APP_PATH = PROJECT_ROOT / "app.py"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
 
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Start the Job Hunter backend server.")
     parser.add_argument(

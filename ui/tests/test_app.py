@@ -8,11 +8,15 @@ from ui.candidate.service import CandidateProfileService
 from ui.shared.api import ApiClient
 
 
-def test_app_wires_candidate_profile_service() -> None:
+def test_build_services_wires_candidate_profile_service() -> None:
     module = reload(app_module)
+    module.build_services.clear()
+    services = module.build_services()
 
-    assert isinstance(module.api_client, ApiClient)
-    assert isinstance(module.candidate_profile_repo, CandidateProfileRepo)
-    assert isinstance(module.candidate_profile_service, CandidateProfileService)
-    assert module.candidate_profile_repo._api_client is module.api_client
-    assert module.candidate_profile_service._repo is module.candidate_profile_repo
+    assert isinstance(services, module.AppServices)
+    assert isinstance(services.candidate_profile_service, CandidateProfileService)
+    assert isinstance(services.candidate_profile_service._repo, CandidateProfileRepo)
+    assert isinstance(
+        services.candidate_profile_service._repo._api_client,
+        ApiClient,
+    )
