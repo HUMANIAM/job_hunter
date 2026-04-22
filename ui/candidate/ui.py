@@ -5,106 +5,61 @@ from typing import Any
 
 import streamlit as st
 
-from ui.candidate.service import (
-    CandidateProfileService,
-    CandidateProfileServiceError,
-)
 from ui.shared.profile_types import SupportedCandidateProfile
 
 
-SESSION_PROFILE_KEY = "candidate_profile"
+def _text(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value)
 
 
-def render_value(value: Any) -> None:
-    if isinstance(value, dict):
-        for key, nested_value in value.items():
-            if isinstance(nested_value, (dict, list)):
-                st.markdown(f"**{key}**")
-                with st.container(border=True):
-                    render_value(nested_value)
-            else:
-                st.write(f"**{key}:** {nested_value}")
-        return
-
-    if isinstance(value, list):
-        if not value:
-            st.write("-")
-            return
-
-        for item in value:
-            if isinstance(item, (dict, list)):
-                with st.container(border=True):
-                    render_value(item)
-            else:
-                st.markdown(f"- {item}")
-        return
-
-    st.write(value)
-
-
-def render_supported_field(field: dict[str, Any], *, title: str) -> None:
-    st.subheader(title)
-
-    confidence = field.get("confidence")
-    evidence = field.get("evidence", [])
-    handled_keys = {"confidence", "evidence"}
-
-    if "primary" in field:
-        st.write(f"**Primary:** {field['primary']}")
-        handled_keys.add("primary")
-
-    if "alternatives" in field:
-        alternatives = field.get("alternatives") or []
-        st.write(
-            f"**Alternatives:** {', '.join(alternatives) if alternatives else '-'}"
-        )
-        handled_keys.add("alternatives")
-
-    if "min_level" in field:
-        st.write(f"**Minimum level:** {field.get('min_level') or '-'}")
-        handled_keys.add("min_level")
-
-    if "accepted_fields" in field:
-        accepted_fields = field.get("accepted_fields") or []
-        st.write(
-            f"**Accepted fields:** {', '.join(accepted_fields) if accepted_fields else '-'}"
-        )
-        handled_keys.add("accepted_fields")
-
-    if confidence is not None:
-        st.write(f"**Confidence:** {confidence}")
-
-    if evidence:
-        with st.expander("Evidence", expanded=False):
-            for item in evidence:
-                st.markdown(f"- {item}")
-    else:
-        st.write("**Evidence:** -")
-
-    extra = {key: value for key, value in field.items() if key not in handled_keys}
-    if extra:
-        with st.container(border=True):
-            st.caption("More details")
-            render_value(extra)
-
-
-def render_feature_list(items: list[Any], *, title: str) -> None:
-    st.subheader(title)
-
+def _csv(items: list[str] | None) -> str:
     if not items:
-        st.info("No data")
-        return
+        return ""
+    return ", ".join(items)
 
-    for index, item in enumerate(items, start=1):
-        with st.container(border=True):
-            st.markdown(f"**Item {index}**")
-            render_value(item)
+
+def _lines(items: list[str] | None) -> str:
+    if not items:
+        return ""
+    return "\n".join(items)
+
+
+def _feature_lines(items: list[dict[str, Any]] | None) -> str:
+    if not items:
+        return ""
+
+    lines: list[str] = []
+    for item in items:
+        name = _text(item.get("name"))
+        strength = _text(item.get("strength"))
+        confidence = _text(item.get("confidence"))
+
+        parts = [part for part in [name, strength, confidence] if part]
+        if parts:
+            lines.append(" | ".join(parts))
+
+    return "\n".join(lines)
+
+
+def _evidence_block(
+    title: str,
+    evidence: list[str] | None,
+    *,
+    key: str,
+) -> None:
+    st.text_area(
+        title,
+        value=_lines(evidence),
+        height=110,
+        disabled=True,
+        key=key,
+    )
 
 
 def render_candidate_profile(profile: SupportedCandidateProfile) -> None:
     payload = asdict(profile)
-
-    st.title("Candidate Profile")
 
     role_titles = payload.get("role_titles", {})
     education = payload.get("education", {})
@@ -113,107 +68,157 @@ def render_candidate_profile(profile: SupportedCandidateProfile) -> None:
     languages = payload.get("languages", [])
     domain_background = payload.get("domain_background", [])
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
-        [
-            "Overview",
-            "Role Titles",
-            "Education",
-            "Experience",
-            "Technical Experience",
-            "Languages",
-            "Domain Background",
-        ]
-    )
+    st.subheader("Candidate Profile")
 
-    with tab1:
+    with st.container(border=True):
+        st.markdown("#### Role Titles")
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("Primary role", role_titles.get("primary", "-"))
-            st.metric("Languages", len(languages))
-        with col2:
-            st.metric(
-                "Accepted education fields",
-                len(education.get("accepted_fields", [])),
+            st.text_input(
+                "Primary role",
+                value=_text(role_titles.get("primary")),
+                disabled=True,
+                key="role_titles_primary",
             )
-            st.metric("Domain background items", len(domain_background))
+        with col2:
+            st.text_input(
+                "Alternatives",
+                value=_csv(role_titles.get("alternatives")),
+                disabled=True,
+                key="role_titles_alternatives",
+            )
 
-    with tab2:
-        render_supported_field(role_titles, title="Role Titles")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.text_input(
+                "Confidence",
+                value=_text(role_titles.get("confidence")),
+                disabled=True,
+                key="role_titles_confidence",
+            )
+        with col2:
+            st.empty()
 
-    with tab3:
-        render_supported_field(education, title="Education")
-
-    with tab4:
-        render_supported_field(experience, title="Experience")
-
-    with tab5:
-        render_supported_field(technical_experience, title="Technical Experience")
-
-    with tab6:
-        render_feature_list(languages, title="Languages")
-
-    with tab7:
-        render_feature_list(domain_background, title="Domain Background")
-
-    with st.expander("Raw JSON", expanded=False):
-        st.json(payload)
-
-
-def _load_profile(
-    *,
-    service: CandidateProfileService,
-    profile_id: int,
-) -> SupportedCandidateProfile | None:
-    try:
-        with st.spinner("Loading candidate profile..."):
-            return service.get_profile(profile_id)
-    except CandidateProfileServiceError as exc:
-        st.error(str(exc))
-        return None
-    except Exception as exc:
-        st.error(f"Unexpected error while loading candidate profile: {exc}")
-        return None
-
-
-def main(service: CandidateProfileService) -> None:
-    st.set_page_config(page_title="Candidate Profile", layout="wide")
-
-    st.sidebar.header("Source")
-    profile_id = st.sidebar.number_input(
-        "uploaded_cv_id",
-        min_value=1,
-        step=1,
-        value=1,
-    )
-
-    if st.sidebar.button("Load profile", type="primary"):
-        profile = _load_profile(service=service, profile_id=profile_id)
-        if profile is not None:
-            st.session_state[SESSION_PROFILE_KEY] = profile
-
-    profile = st.session_state.get(SESSION_PROFILE_KEY)
-    if profile is None:
-        st.info("Load a candidate profile from the sidebar.")
-        return
-
-    if not isinstance(profile, SupportedCandidateProfile):
-        st.error(
-            "Stored candidate profile has an unsupported shape. Reload the profile."
+        _evidence_block(
+            "Evidence",
+            role_titles.get("evidence"),
+            key="role_titles_evidence",
         )
-        return
 
-    render_candidate_profile(profile)
+    with st.container(border=True):
+        st.markdown("#### Education")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.text_input(
+                "Minimum level",
+                value=_text(education.get("min_level")),
+                disabled=True,
+                key="education_min_level",
+            )
+        with col2:
+            st.text_input(
+                "Accepted fields",
+                value=_csv(education.get("accepted_fields")),
+                disabled=True,
+                key="education_accepted_fields",
+            )
 
+        col1, col2 = st.columns(2)
+        with col1:
+            st.text_input(
+                "Confidence",
+                value=_text(education.get("confidence")),
+                disabled=True,
+                key="education_confidence",
+            )
+        with col2:
+            st.empty()
 
-def render_profile_section(
-    *,
-    service: CandidateProfileService,
-    profile_id: int,
-) -> None:
-    st.header("Candidate")
+        _evidence_block(
+            "Evidence",
+            education.get("evidence"),
+            key="education_evidence",
+        )
 
-    profile = _load_profile(service=service, profile_id=profile_id)
-    if profile is None:
-        return
+    with st.container(border=True):
+        st.markdown("#### Experience")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.text_input(
+                "Minimum years",
+                value=_text(experience.get("min_years")),
+                disabled=True,
+                key="experience_min_years",
+            )
+        with col2:
+            st.text_input(
+                "Seniority band",
+                value=_text(experience.get("seniority_band")),
+                disabled=True,
+                key="experience_seniority_band",
+            )
 
-    render_candidate_profile(profile)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.text_input(
+                "Confidence",
+                value=_text(experience.get("confidence")),
+                disabled=True,
+                key="experience_confidence",
+            )
+        with col2:
+            st.empty()
+
+        _evidence_block(
+            "Evidence",
+            experience.get("evidence"),
+            key="experience_evidence",
+        )
+
+    with st.container(border=True):
+        st.markdown("#### Technical Experience")
+        st.text_area(
+            "Core features",
+            value=_feature_lines(technical_experience.get("technical_core_features")),
+            height=150,
+            disabled=True,
+            key="technical_experience_core_features",
+        )
+        st.text_area(
+            "Technologies",
+            value=_feature_lines(technical_experience.get("technologies")),
+            height=150,
+            disabled=True,
+            key="technical_experience_technologies",
+        )
+        st.text_input(
+            "Confidence",
+            value=_text(technical_experience.get("confidence")),
+            disabled=True,
+            key="technical_experience_confidence",
+        )
+        _evidence_block(
+            "Evidence",
+            technical_experience.get("evidence"),
+            key="technical_experience_evidence",
+        )
+
+    with st.container(border=True):
+        st.markdown("#### Languages")
+        st.text_area(
+            "Languages",
+            value=_feature_lines(languages),
+            height=120,
+            disabled=True,
+            key="languages",
+        )
+
+    with st.container(border=True):
+        st.markdown("#### Domain Background")
+        st.text_area(
+            "Domain background",
+            value=_feature_lines(domain_background),
+            height=120,
+            disabled=True,
+            key="domain_background",
+        )

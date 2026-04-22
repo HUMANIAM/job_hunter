@@ -48,8 +48,9 @@ def test_home_page_uses_session_services() -> None:
 
     assert len(app.error) == 0
     assert app.title[0].value == "Home"
-    assert app.metric[0].label == "Primary role"
-    assert app.metric[0].value == "software engineer 501"
+    assert app.subheader[0].value == "Candidate Profile"
+    assert app.text_input[0].label == "Primary role"
+    assert app.text_input[0].value == "software engineer 501"
 
 
 def test_home_page_requires_services_in_session_state() -> None:
