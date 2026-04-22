@@ -5,7 +5,7 @@ from urllib.parse import urljoin
 
 import requests
 
-from ..settings import get_settings
+from ui.settings import get_settings
 
 
 class ApiError(Exception):
