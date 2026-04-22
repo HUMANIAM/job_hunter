@@ -10,52 +10,47 @@ from ui.shared.profile_types import SupportedCandidateProfile
 
 def _text(value: Any) -> str:
     if value is None:
-        return ""
-    return str(value)
+        return "-"
+    text = str(value).strip()
+    return text or "-"
 
 
 def _csv(items: list[str] | None) -> str:
     if not items:
-        return ""
-    return ", ".join(items)
+        return "-"
+    values = [str(item).strip() for item in items if str(item).strip()]
+    return ", ".join(values) if values else "-"
 
 
-def _lines(items: list[str] | None) -> str:
+def _feature_text(item: dict[str, Any]) -> str:
+    name = str(item.get("name") or "").strip()
+    strength = str(item.get("strength") or "").strip()
+
+    parts = [part for part in [name, strength] if part]
+    return " · ".join(parts) if parts else "-"
+
+
+def _render_field(label: str, value: Any) -> None:
+    st.caption(label)
+    st.markdown(_text(value))
+
+
+def _render_feature_list(items: list[dict[str, Any]] | None, empty_text: str) -> None:
     if not items:
-        return ""
-    return "\n".join(items)
+        st.markdown(empty_text)
+        return
 
-
-def _feature_lines(items: list[dict[str, Any]] | None) -> str:
-    if not items:
-        return ""
-
-    lines: list[str] = []
     for item in items:
-        name = _text(item.get("name"))
-        strength = _text(item.get("strength"))
-        confidence = _text(item.get("confidence"))
-
-        parts = [part for part in [name, strength, confidence] if part]
-        if parts:
-            lines.append(" | ".join(parts))
-
-    return "\n".join(lines)
+        st.markdown(f"- {_feature_text(item)}")
 
 
-def _evidence_block(
-    title: str,
-    evidence: list[str] | None,
-    *,
-    key: str,
-) -> None:
-    st.text_area(
-        title,
-        value=_lines(evidence),
-        height=110,
-        disabled=True,
-        key=key,
-    )
+def _render_evidence(items: list[str] | None, key: str) -> None:
+    if not items:
+        return
+
+    with st.expander("Evidence", expanded=False):
+        for index, item in enumerate(items, start=1):
+            st.markdown(f"{index}. {item}", help=key)
 
 
 def render_candidate_profile(profile: SupportedCandidateProfile) -> None:
@@ -68,157 +63,62 @@ def render_candidate_profile(profile: SupportedCandidateProfile) -> None:
     languages = payload.get("languages", [])
     domain_background = payload.get("domain_background", [])
 
-    st.subheader("Candidate Profile")
+    st.subheader("Candidate Profile", divider="rainbow")
 
     with st.container(border=True):
         st.markdown("#### Role Titles")
         col1, col2 = st.columns(2)
         with col1:
-            st.text_input(
-                "Primary role",
-                value=_text(role_titles.get("primary")),
-                disabled=True,
-                key="role_titles_primary",
-            )
+            _render_field("Primary role", role_titles.get("primary"))
         with col2:
-            st.text_input(
-                "Alternatives",
-                value=_csv(role_titles.get("alternatives")),
-                disabled=True,
-                key="role_titles_alternatives",
-            )
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.text_input(
-                "Confidence",
-                value=_text(role_titles.get("confidence")),
-                disabled=True,
-                key="role_titles_confidence",
-            )
-        with col2:
-            st.empty()
-
-        _evidence_block(
-            "Evidence",
-            role_titles.get("evidence"),
-            key="role_titles_evidence",
-        )
+            _render_field("Alternatives", _csv(role_titles.get("alternatives")))
+        _render_field("Confidence", role_titles.get("confidence"))
+        _render_evidence(role_titles.get("evidence"), "role_titles_evidence")
 
     with st.container(border=True):
         st.markdown("#### Education")
         col1, col2 = st.columns(2)
         with col1:
-            st.text_input(
-                "Minimum level",
-                value=_text(education.get("min_level")),
-                disabled=True,
-                key="education_min_level",
-            )
+            _render_field("Minimum level", education.get("min_level"))
         with col2:
-            st.text_input(
-                "Accepted fields",
-                value=_csv(education.get("accepted_fields")),
-                disabled=True,
-                key="education_accepted_fields",
-            )
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.text_input(
-                "Confidence",
-                value=_text(education.get("confidence")),
-                disabled=True,
-                key="education_confidence",
-            )
-        with col2:
-            st.empty()
-
-        _evidence_block(
-            "Evidence",
-            education.get("evidence"),
-            key="education_evidence",
-        )
+            _render_field("Accepted fields", _csv(education.get("accepted_fields")))
+        _render_field("Confidence", education.get("confidence"))
+        _render_evidence(education.get("evidence"), "education_evidence")
 
     with st.container(border=True):
         st.markdown("#### Experience")
         col1, col2 = st.columns(2)
         with col1:
-            st.text_input(
-                "Minimum years",
-                value=_text(experience.get("min_years")),
-                disabled=True,
-                key="experience_min_years",
-            )
+            _render_field("Minimum years", experience.get("min_years"))
         with col2:
-            st.text_input(
-                "Seniority band",
-                value=_text(experience.get("seniority_band")),
-                disabled=True,
-                key="experience_seniority_band",
-            )
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.text_input(
-                "Confidence",
-                value=_text(experience.get("confidence")),
-                disabled=True,
-                key="experience_confidence",
-            )
-        with col2:
-            st.empty()
-
-        _evidence_block(
-            "Evidence",
-            experience.get("evidence"),
-            key="experience_evidence",
-        )
+            _render_field("Seniority band", experience.get("seniority_band"))
+        _render_field("Confidence", experience.get("confidence"))
+        _render_evidence(experience.get("evidence"), "experience_evidence")
 
     with st.container(border=True):
         st.markdown("#### Technical Experience")
-        st.text_area(
-            "Core features",
-            value=_feature_lines(technical_experience.get("technical_core_features")),
-            height=150,
-            disabled=True,
-            key="technical_experience_core_features",
+        st.caption("Core features")
+        _render_feature_list(
+            technical_experience.get("technical_core_features"),
+            "No core features",
         )
-        st.text_area(
-            "Technologies",
-            value=_feature_lines(technical_experience.get("technologies")),
-            height=150,
-            disabled=True,
-            key="technical_experience_technologies",
+        st.divider()
+        st.caption("Technologies")
+        _render_feature_list(
+            technical_experience.get("technologies"),
+            "No technologies",
         )
-        st.text_input(
-            "Confidence",
-            value=_text(technical_experience.get("confidence")),
-            disabled=True,
-            key="technical_experience_confidence",
-        )
-        _evidence_block(
-            "Evidence",
+        st.divider()
+        _render_field("Confidence", technical_experience.get("confidence"))
+        _render_evidence(
             technical_experience.get("evidence"),
-            key="technical_experience_evidence",
+            "technical_experience_evidence",
         )
 
     with st.container(border=True):
         st.markdown("#### Languages")
-        st.text_area(
-            "Languages",
-            value=_feature_lines(languages),
-            height=120,
-            disabled=True,
-            key="languages",
-        )
+        _render_feature_list(languages, "No languages")
 
     with st.container(border=True):
         st.markdown("#### Domain Background")
-        st.text_area(
-            "Domain background",
-            value=_feature_lines(domain_background),
-            height=120,
-            disabled=True,
-            key="domain_background",
-        )
+        _render_feature_list(domain_background, "No domain background")

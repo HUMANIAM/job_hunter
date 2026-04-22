@@ -27,9 +27,9 @@ def test_render_candidate_profile_displays_supported_profile() -> None:
     app.run()
 
     assert app.subheader[0].value == "Candidate Profile"
-    assert app.text_input[0].label == "Primary role"
-    assert app.text_input[0].value == "software engineer"
-    assert app.text_input[1].label == "Alternatives"
-    assert app.text_input[1].value == "backend engineer, full stack developer"
-    assert app.text_area[0].label == "Evidence"
-    assert app.text_area[0].value == "cv title\ncv description"
+    assert app.caption[0].value == "Primary role"
+    assert app.markdown[1].value == "software engineer"
+    assert app.caption[1].value == "Alternatives"
+    assert app.markdown[2].value == "backend engineer, full stack developer"
+    assert app.markdown[4].value == "1. cv title"
+    assert app.markdown[5].value == "2. cv description"

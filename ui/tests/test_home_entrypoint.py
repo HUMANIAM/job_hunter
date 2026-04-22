@@ -39,5 +39,5 @@ def test_app_entrypoint_renders_home_page_from_file(monkeypatch) -> None:
     assert len(app.error) == 0
     assert app.title[0].value == "Home"
     assert app.subheader[0].value == "Candidate Profile"
-    assert app.text_input[0].label == "Primary role"
-    assert app.text_input[0].value == "software engineer 501"
+    assert app.caption[0].value == "Primary role"
+    assert app.markdown[1].value == "software engineer 501"
