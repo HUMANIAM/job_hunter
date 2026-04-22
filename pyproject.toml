@@ -29,6 +29,11 @@ dev = [
 [project.scripts]
 fetch-jobs = "fetch_jobs:main"
 
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["scripts*", "ui*", "shared*", "clients*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import List
 from uuid import uuid4
@@ -14,11 +13,6 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from clients.candidate_profiling.candidate_route import router as candidate_router
 from infra.db import get_session
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 from clients.health import router as health_router
 from core.config import get_settings
