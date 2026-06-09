@@ -15,6 +15,8 @@ from clients.sources.philips.adapter import (
     PhilipsListingFilters,
     PhilipsPageState,
 )
+from shared import api as shared_api_module
+from shared.api import ApiClient
 
 
 class FakeResponse:
@@ -70,7 +72,12 @@ def test_build_job_url_preserves_jobs_listing_prefix() -> None:
 def test_fetch_listing_response_posts_expected_payload() -> None:
     fake_response = FakeResponse(payload={"jobPostings": [], "total": 0})
     session = FakeSession(fake_response)
-    adapter = PhilipsAPIListingAdapter(session=session)
+    adapter = PhilipsAPIListingAdapter(
+        api_client=ApiClient(
+            session=session,
+            timeout_seconds=REQUEST_TIMEOUT_SECONDS,
+        )
+    )
 
     response = adapter._fetch_listing_response(
         PhilipsPageState(offset=40, country_facet_id="facet-123"),
@@ -106,10 +113,15 @@ def test_fetch_listing_response_logs_and_reraises_http_error(monkeypatch) -> Non
             status_code=500,
             url=f"{API_URL}?offset=20",
             raise_error=requests.HTTPError("boom"),
+    )
+    )
+    adapter = PhilipsAPIListingAdapter(
+        api_client=ApiClient(
+            session=session,
+            timeout_seconds=REQUEST_TIMEOUT_SECONDS,
         )
     )
-    adapter = PhilipsAPIListingAdapter(session=session)
-    monkeypatch.setattr(philips_adapter_module, "log", messages.append)
+    monkeypatch.setattr(shared_api_module, "log", messages.append)
 
     with pytest.raises(requests.HTTPError):
         adapter._fetch_listing_response(
@@ -145,7 +157,10 @@ def test_discover_country_facet_id_uses_configured_filters() -> None:
     )
     session = FakeSession(fake_response)
     adapter = PhilipsAPIListingAdapter(
-        session=session,
+        api_client=ApiClient(
+            session=session,
+            timeout_seconds=REQUEST_TIMEOUT_SECONDS,
+        ),
         filters=PhilipsListingFilters(country_descriptor="Nederland"),
     )
 

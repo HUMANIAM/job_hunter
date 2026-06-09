@@ -6,6 +6,7 @@ from typing import Any
 
 from clients.base import BaseClientAdapter
 from infra.logging import log
+from shared.utils import _max
 
 
 @dataclass(frozen=True)
@@ -22,45 +23,50 @@ class APIListingAdapter(BaseClientAdapter, ABC):
         *,
         job_limit: int,
     ) -> list[str]:
-        best_links: set[str] = set()
-        best_expected_total: int | None = None
+        accumulated_links: set[str] = set()
+        best_total_links_count: int | None = None
         max_attempts = self._get_max_attempts()
+        jobs_count = self._get_jobs_count()
+        class_name = self.__class__.__name__
 
         for attempt_index in range(1, max_attempts + 1):
-            if max_attempts > 1:
-                log(
-                    f"{self.__class__.__name__}: "
-                    f"attempt {attempt_index}/{max_attempts}"
-                )
+            log(f"{class_name}: attempt {attempt_index}/{max_attempts}")
 
-            attempt_links, expected_total = self._collect_job_links_once(
+            attempt_links, expected_total_links_count = self._collect_job_links_once(
                 job_limit=job_limit,
             )
+            best_total_links_count = _max(
+                best_total_links_count,
+                expected_total_links_count,
+            )
 
-            if len(attempt_links) > len(best_links):
-                best_links = attempt_links
+            accumulated_links.update(attempt_links)
 
-            if expected_total is not None:
-                if best_expected_total is None:
-                    best_expected_total = expected_total
-                else:
-                    best_expected_total = max(best_expected_total, expected_total)
-
-            if self._is_collection_complete(
-                collected_links=best_links,
-                expected_total=best_expected_total,
-                job_limit=job_limit,
+            if (
+                best_total_links_count is not None
+                and len(accumulated_links) >= best_total_links_count
             ):
-                log(f"{self.__class__.__name__}: collection complete")
+                log(
+                    f"{class_name}: reached expected total {best_total_links_count}"
+                    f" across {attempt_index} attempts, stopping"
+                )
                 break
 
-        return sorted(best_links)[:job_limit]
+            if len(accumulated_links) >= job_limit:
+                log(
+                    f"{class_name}: reached job limit {job_limit} "
+                    f"across {attempt_index} attempts, stopping"
+                )
+                break
+
+        return sorted(accumulated_links)[:job_limit]
 
     def _collect_job_links_once(
         self,
         *,
         job_limit: int,
     ) -> tuple[set[str], int | None]:
+        class_name = self.__class__.__name__
         collected_links: set[str] = set()
         seen_request_states: set[str] = set()
         request_state = self._get_initial_request_state()
@@ -69,12 +75,12 @@ class APIListingAdapter(BaseClientAdapter, ABC):
 
         while request_state is not None:
             if len(collected_links) >= job_limit:
-                log(f"{self.__class__.__name__}: reached job limit, stopping")
+                log(f"{class_name}: reached job limit, stopping")
                 break
 
             state_key = self._get_request_state_key(request_state)
             if state_key in seen_request_states:
-                log(f"{self.__class__.__name__}: repeated request state, stopping")
+                log(f"{class_name}: repeated request state, stopping")
                 break
             seen_request_states.add(state_key)
 
@@ -91,48 +97,47 @@ class APIListingAdapter(BaseClientAdapter, ABC):
             after = len(collected_links)
 
             log(
-                f"{self.__class__.__name__} page {page_index}: "
+                f"{class_name} page {page_index}: "
                 f"added {after - before} new links | cumulative={after}"
             )
 
+            if after == before:
+                log(f"{class_name}: page yielded no new links, stopping")
+                break
+
             if expected_total is None and page_result.expected_total is not None:
                 expected_total = page_result.expected_total
-                log(f"{self.__class__.__name__}: expected_total={expected_total}")
+                log(f"{class_name}: expected_total={expected_total}")
 
             if after >= job_limit:
-                log(f"{self.__class__.__name__}: reached job limit, stopping")
+                log(f"{class_name}: reached job limit, stopping")
                 break
 
             if expected_total is not None and after >= expected_total:
-                log(f"{self.__class__.__name__}: reached expected total, stopping")
+                log(f"{class_name}: reached expected total, stopping")
                 break
 
             if page_result.is_last_page:
-                log(f"{self.__class__.__name__}: api reported last page")
+                log(f"{class_name}: api reported last page")
                 break
 
             request_state = page_result.next_request_state
             page_index += 1
+
+        if expected_total is not None and len(collected_links) > expected_total:
+            raise ValueError(
+                f"{class_name}: collected more links than expected total "
+                f"links={len(collected_links)} "
+                f"expected_total={expected_total}"
+            )
 
         return collected_links, expected_total
 
     def _get_max_attempts(self) -> int:
         return 1
 
-    def _is_collection_complete(
-        self,
-        *,
-        collected_links: set[str],
-        expected_total: int | None,
-        job_limit: int,
-    ) -> bool:
-        if len(collected_links) >= job_limit:
-            return True
-
-        if expected_total is not None and len(collected_links) >= expected_total:
-            return True
-
-        return False
+    def _get_jobs_count(self) -> int | None:
+        return None
 
     @abstractmethod
     def _get_initial_request_state(self) -> Any:

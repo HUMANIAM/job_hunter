@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from sources.base import SourceDefinition
 from sources.sioux import SIOUX_SOURCE
+from sources.thermofisher import THERMOFISHER_SOURCE
 
 SOURCE_REGISTRY: dict[str, SourceDefinition] = {
     SIOUX_SOURCE.company_slug: SIOUX_SOURCE,
+    THERMOFISHER_SOURCE.company_slug: THERMOFISHER_SOURCE,
 }
 
 

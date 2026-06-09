@@ -3,17 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-import requests
-
 from clients.sources.api_listing_adapter import APIListingAdapter, APIPageResult
 from infra.logging import log
+from shared.api import ApiClient
 
 
 ENTRY_URL = "https://philips.wd3.myworkdayjobs.com/nl-nl/jobs-and-careers"
 API_URL = "https://philips.wd3.myworkdayjobs.com/wday/cxs/philips/jobs-and-careers/jobs"
 ORIGIN_URL = "https://philips.wd3.myworkdayjobs.com"
 REQUEST_TIMEOUT_SECONDS = 30
-DEFAULT_MAX_ATTEMPTS = 1
+DEFAULT_MAX_ATTEMPTS = 3
 PHILIPS_PAGE_SIZE = 20
 JOB_PATH_PREFIX = "/job/"
 
@@ -33,14 +32,18 @@ class PhilipsPageState:
 
 
 class PhilipsAPIListingAdapter(APIListingAdapter):
+    LOG_PREFIX = "PhilipsAPIListingAdapter"
+
     def __init__(
         self,
         *,
-        session: requests.Session | None = None,
+        api_client: ApiClient | None = None,
         filters: PhilipsListingFilters | None = None,
         max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     ) -> None:
-        self._session = session or requests.Session()
+        self._api_client = api_client or ApiClient(
+            timeout_seconds=REQUEST_TIMEOUT_SECONDS,
+        )
         self._filters = filters or PhilipsListingFilters()
         self._max_attempts = max_attempts
 
@@ -51,7 +54,7 @@ class PhilipsAPIListingAdapter(APIListingAdapter):
         country_facet_id = self._discover_country_facet_id()
         if not country_facet_id:
             log(
-                f"{self.__class__.__name__}: "
+                f"{self.LOG_PREFIX}: "
                 f"{self._filters.country_descriptor} facet not found"
             )
             return None
@@ -111,27 +114,16 @@ class PhilipsAPIListingAdapter(APIListingAdapter):
         offset: int,
         country_facet_id: str | None,
     ) -> dict[str, Any]:
-        response = self._session.post(
+        return self._api_client.post(
             API_URL,
             headers=self._build_headers(),
-            json=self._build_payload(
+            json_body=self._build_payload(
                 offset=offset,
                 country_facet_id=country_facet_id,
             ),
-            timeout=REQUEST_TIMEOUT_SECONDS,
+            error_prefix=self.LOG_PREFIX,
+            log_context={"offset": offset},
         )
-        try:
-            response.raise_for_status()
-        except requests.HTTPError:
-            log(
-                f"{self.__class__.__name__}: request failed "
-                f"status={response.status_code} "
-                f"offset={offset} "
-                f"url={response.url}"
-            )
-            raise
-
-        return response.json()
 
     def _build_headers(self) -> dict[str, str]:
         return {
