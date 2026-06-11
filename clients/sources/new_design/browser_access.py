@@ -7,6 +7,10 @@ Selector = str
 SelectorList = Sequence[Selector]
 
 
+class BrowserAccessError(RuntimeError):
+    """Raised when a browser access implementation cannot complete an operation."""
+
+
 class DOMElement(ABC):
     @abstractmethod
     def get_attribute(self, name: str) -> str | None:
@@ -34,6 +38,17 @@ class BrowserAccess(ABC):
             url: The URL to open.
             wait_for_selectors: Selectors to wait for after opening the URL.
             click_if_visible_selectors: Selectors to click when visible.
+        """
+        pass
+
+    @abstractmethod
+    def download_page(self, url: str) -> str:
+        """
+        Open the specified URL and return the loaded page HTML.
+        Args:
+            url: The URL to download.
+        Returns:
+            The current page HTML.
         """
         pass
 

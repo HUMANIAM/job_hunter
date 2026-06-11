@@ -3,15 +3,16 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Iterator
 
-from playwright.sync_api import BrowserContext, Locator, Page
+from playwright.sync_api import BrowserContext, Error as PlaywrightError, Locator, Page
 
 from clients.sources.new_design.browser_access import (
     BrowserAccess,
+    BrowserAccessError,
     DOMElement,
     Selector,
     SelectorList,
 )
-from infra.browser import create_browser, open_and_prepare_page
+from infra.browser import create_browser, open_and_prepare_page, open_page
 from infra.logging import log
 
 
@@ -26,13 +27,24 @@ class PlaywrightDOMElement(DOMElement):
         self._locator = locator
 
     def get_attribute(self, name: str) -> str | None:
-        return self._locator.get_attribute(name)
+        try:
+            return self._locator.get_attribute(name)
+        except PlaywrightError as exc:
+            raise BrowserAccessError(
+                f"Failed to read DOM element attribute: {name}"
+            ) from exc
 
     def get_text(self, selector: str | None = None) -> str:
-        if selector is None:
-            return self._locator.inner_text()
+        try:
+            if selector is None:
+                return self._locator.inner_text()
 
-        return self._locator.locator(selector).inner_text()
+            return self._locator.locator(selector).inner_text()
+        except PlaywrightError as exc:
+            target = "root element" if selector is None else selector
+            raise BrowserAccessError(
+                f"Failed to read DOM element text: {target}"
+            ) from exc
 
 
 class PlaywrightBrowserAccess(BrowserAccess):
@@ -49,29 +61,53 @@ class PlaywrightBrowserAccess(BrowserAccess):
     ) -> None:
         page = self._get_page()
 
-        clicked_selectors = open_and_prepare_page(
-            page,
-            url,
-            wait_for=wait_for_selectors,
-            click_if_visible_selectors=click_if_visible_selectors,
-        )
+        try:
+            clicked_selectors = open_and_prepare_page(
+                page,
+                url,
+                wait_for=wait_for_selectors,
+                click_if_visible_selectors=click_if_visible_selectors,
+            )
+        except PlaywrightError as exc:
+            raise BrowserAccessError(f"Failed to open browser URL: {url}") from exc
 
         if clicked_selectors:
             log(f"clicked visible browser setup selectors: {clicked_selectors}")
 
+
+    def download_page(self, url: str) -> str:
+        page = self._get_page()
+
+        try:
+            open_page(page, url)
+            return page.content()
+        except PlaywrightError as exc:
+            raise BrowserAccessError(f"Failed to download browser page: {url}") from exc
+
+
     def find_elements(self, selector: Selector) -> list[DOMElement]:
-        locator = self._get_page().locator(selector)
-        return [
-            PlaywrightDOMElement(locator.nth(index))
-            for index in range(locator.count())
-        ]
+        try:
+            locator = self._get_page().locator(selector)
+            return [
+                PlaywrightDOMElement(locator.nth(index))
+                for index in range(locator.count())
+            ]
+        except PlaywrightError as exc:
+            raise BrowserAccessError(
+                f"Failed to find browser elements: {selector}"
+            ) from exc
+
 
     def current_url(self) -> str:
         return self._get_page().url
 
+
     def _get_page(self) -> Page:
         if self._page is None:
-            self._page = self._context.new_page()
+            try:
+                self._page = self._context.new_page()
+            except PlaywrightError as exc:
+                raise BrowserAccessError("Failed to create browser page") from exc
 
         return self._page
 

@@ -32,6 +32,10 @@ class FakeBrowserAccess(BrowserAccess):
     ) -> None:
         self._current_url = url
 
+    def download_page(self, url: str) -> str:
+        self._current_url = url
+        return ""
+
     def find_elements(self, selector: Selector) -> list[DOMElement]:
         return self._elements_by_url[self._current_url].get(selector, [])
 

@@ -98,3 +98,27 @@ class RequestsHttpAccess(http.HttpAccess):
             status_code=response.status_code,
             content=content,
         )
+
+    def get(self, request: http.HttpRequest) -> http.HttpResponse:
+        try:
+            response = self._session.get(
+                request.url,
+                headers=request.headers,
+                timeout=request.timeout_seconds,
+            )
+            response.raise_for_status()
+        except Exception as exc:
+            access_error = self._error_mapper.map_exception_error(exc)
+            log(
+                "HTTP GET failed "
+                f"kind={access_error.failure_kind} "
+                f"status={access_error.status_code} "
+                f"url={request.url} "
+                f"error={exc}"
+            )
+            raise access_error from exc
+
+        return http.HttpResponse(
+            status_code=response.status_code,
+            content=response.text,
+        )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 from enum import Enum
 
@@ -11,14 +11,15 @@ DEFAULT_HTTP_TIMEOUT_SECONDS = 30
 class HttpRequest:
     url: str
     headers: dict[str, str]
-    body: dict[str, Any]
+    body: dict[str, Any] = field(default_factory=dict)
     timeout_seconds: int = DEFAULT_HTTP_TIMEOUT_SECONDS
 
 
 @dataclass(frozen=True)
 class HttpResponse:
     status_code: int
-    content: dict[str, Any]
+    # API calls use JSON content; page downloads use raw text.
+    content: dict[str, Any] | str
 
 
 class HttpAccessFailureKind(str, Enum):
@@ -40,6 +41,19 @@ class HttpAccess(ABC):
     def post(self, request: HttpRequest) -> HttpResponse:
         """
         Perform an HTTP POST request.
+
+        Args:
+            request: HTTP request data needed by the access layer.
+
+        Returns:
+            The response content as an HttpResponse object.
+        """
+        pass
+
+    @abstractmethod
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """
+        Perform an HTTP GET request.
 
         Args:
             request: HTTP request data needed by the access layer.
