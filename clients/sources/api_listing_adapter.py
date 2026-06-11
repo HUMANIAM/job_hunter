@@ -26,7 +26,6 @@ class APIListingAdapter(BaseClientAdapter, ABC):
         accumulated_links: set[str] = set()
         best_total_links_count: int | None = None
         max_attempts = self._get_max_attempts()
-        jobs_count = self._get_jobs_count()
         class_name = self.__class__.__name__
 
         for attempt_index in range(1, max_attempts + 1):
@@ -135,9 +134,6 @@ class APIListingAdapter(BaseClientAdapter, ABC):
 
     def _get_max_attempts(self) -> int:
         return 1
-
-    def _get_jobs_count(self) -> int | None:
-        return None
 
     @abstractmethod
     def _get_initial_request_state(self) -> Any:
