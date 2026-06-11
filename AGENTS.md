@@ -5,6 +5,10 @@
 - Never run commands outside `.venv` unless the user explicitly asks for that.
 - Use the `.venv` environment for testing, verification, and run scripts. It is the development environment for this repository.
 
+## Code Style Rules
+
+- Imports must be declared at the top of the file. Never place imports inside functions, methods, or local blocks.
+
 ## Test Data Rules
 
 - When reusable reference data exists under `tests/**/data/`, use that reference data in tests instead of copying the same literals inline.
