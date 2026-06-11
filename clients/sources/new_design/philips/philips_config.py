@@ -1,0 +1,10 @@
+ENTRY_URL = "https://philips.wd3.myworkdayjobs.com/nl-nl/jobs-and-careers"
+API_URL = "https://philips.wd3.myworkdayjobs.com/wday/cxs/philips/jobs-and-careers/jobs"
+ORIGIN_URL = "https://philips.wd3.myworkdayjobs.com"
+REQUEST_TIMEOUT_SECONDS = 30
+PHILIPS_PAGE_SIZE = 20
+JOB_PATH_PREFIX = "/job/"
+LOCATION_GROUP_FACET_ID = "locationMainGroup"
+LOCATION_FACET_ID = "locationHierarchy1"
+DEFAULT_LOCALE = "nl-NL"
+DEFAULT_COUNTRY = "Netherlands"
