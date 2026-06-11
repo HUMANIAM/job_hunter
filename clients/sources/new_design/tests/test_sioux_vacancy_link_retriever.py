@@ -20,12 +20,16 @@ class FakeBrowserAccess(BrowserAccess):
     def __init__(
         self,
         elements_by_url: dict[str, dict[Selector, list[DOMElement]]],
+        *,
+        pages_by_url: dict[str, str] | None = None,
     ) -> None:
         self._elements_by_url = elements_by_url
+        self._pages_by_url = pages_by_url or {}
         self._current_url = ""
         self.open_calls: list[
             tuple[str, tuple[Selector, ...], tuple[Selector, ...]]
         ] = []
+        self.download_calls: list[str] = []
 
     def open_url(
         self,
@@ -42,6 +46,11 @@ class FakeBrowserAccess(BrowserAccess):
                 tuple(click_if_visible_selectors),
             )
         )
+
+    def download_page(self, url: str) -> str:
+        self._current_url = url
+        self.download_calls.append(url)
+        return self._pages_by_url[url]
 
     def find_elements(self, selector: Selector) -> list[DOMElement]:
         return self._elements_by_url[self._current_url].get(selector, [])
@@ -80,6 +89,25 @@ def test_get_initial_cursor_discovers_discipline_facets() -> None:
             (config.SIOUX_RESULTS_READY_SELECTOR,),
             (config.SIOUX_COOKIE_ACCEPT_SELECTOR,),
         )
+    ]
+
+
+def test_retrieve_vacancy_page_downloads_html_page() -> None:
+    browser_access = FakeBrowserAccess(
+        {},
+        pages_by_url={
+            "https://vacancy.sioux.eu/vacancies/one.html": "<html>Sioux vacancy</html>",
+        },
+    )
+    retriever = SiouxVacancyLinkRetriever(browser_access=browser_access)
+
+    page = retriever.retrieve_vacancy_page(
+        "https://vacancy.sioux.eu/vacancies/one.html"
+    )
+
+    assert page == "<html>Sioux vacancy</html>"
+    assert browser_access.download_calls == [
+        "https://vacancy.sioux.eu/vacancies/one.html"
     ]
 
 

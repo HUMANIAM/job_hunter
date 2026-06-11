@@ -23,6 +23,23 @@ class PhilipsVacancyLinkRetriever(vlr.VacancyLinkRetriever):
     ) -> None:
         self._http_access = http_access
 
+    def retrieve_vacancy_page(self, vacancy_url: str) -> str:
+        response = self._http_access.get(
+            http.HttpRequest(
+                url=vacancy_url,
+                headers={
+                    "Accept": "text/html",
+                    "Accept-Language": config.DEFAULT_LOCALE,
+                },
+                timeout_seconds=config.REQUEST_TIMEOUT_SECONDS,
+            )
+        )
+
+        if not isinstance(response.content, str):
+            raise TypeError("Expected text content when retrieving Philips vacancy page")
+
+        return response.content
+
     def _get_initial_cursor(
         self,
         *,

@@ -73,6 +73,16 @@ class VacancyLinkRetriever(ABC):
 
         return progress.retrieved_links
 
+    @abstractmethod
+    def retrieve_vacancy_page(self, vacancy_url: str) -> str:
+        """
+        Retrieve the raw page content for a vacancy URL.
+        Args:
+            vacancy_url: The vacancy URL to retrieve.
+        Returns:
+            The raw vacancy page content.
+        """
+        pass
 
     @abstractmethod
     def _get_initial_cursor(
@@ -86,7 +96,6 @@ class VacancyLinkRetriever(ABC):
             The initial cursor object, or None if no cursor is needed.
         """
         pass
-
 
     @abstractmethod
     def _retrieve_listing_batch(
@@ -102,7 +111,6 @@ class VacancyLinkRetriever(ABC):
             A VacancyLinkBatch object containing the retrieved links and the next cursor.
         """
         pass
-
 
     def _stop_retrieval(
         self,
@@ -137,4 +145,3 @@ class VacancyLinkRetriever(ABC):
             links_limit - len(retrieval_progress.retrieved_links.links),
             0,
         )
-

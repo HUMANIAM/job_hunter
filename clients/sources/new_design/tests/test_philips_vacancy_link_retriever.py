@@ -19,6 +19,37 @@ class FakeHttpAccess(http.HttpAccess):
         self.requests.append(request)
         return self._responses.pop(0)
 
+    def get(self, request: http.HttpRequest) -> http.HttpResponse:
+        self.requests.append(request)
+        return self._responses.pop(0)
+
+
+def test_retrieve_vacancy_page_gets_html_page() -> None:
+    http_access = FakeHttpAccess(
+        [
+            http.HttpResponse(
+                status_code=200,
+                content="<html>Philips vacancy</html>",
+            )
+        ]
+    )
+    retriever = PhilipsVacancyLinkRetriever(http_access=http_access)
+
+    page = retriever.retrieve_vacancy_page("https://example.test/job/1")
+
+    assert page == "<html>Philips vacancy</html>"
+    assert http_access.requests == [
+        http.HttpRequest(
+            url="https://example.test/job/1",
+            headers={
+                "Accept": "text/html",
+                "Accept-Language": config.DEFAULT_LOCALE,
+            },
+            body={},
+            timeout_seconds=config.REQUEST_TIMEOUT_SECONDS,
+        )
+    ]
+
 
 def test_get_initial_cursor_discovers_country_facet_id() -> None:
     http_access = FakeHttpAccess(

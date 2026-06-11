@@ -23,6 +23,9 @@ class SiouxVacancyLinkRetriever(vlr.VacancyLinkRetriever):
     ) -> None:
         self._browser_access = browser_access
 
+    def retrieve_vacancy_page(self, vacancy_url: str) -> str:
+        return self._browser_access.download_page(vacancy_url)
+
     def _get_initial_cursor(
         self,
         *,
