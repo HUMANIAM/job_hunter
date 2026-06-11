@@ -11,6 +11,8 @@ def discover_country_facet_id(
     *,
     country: str,
 ) -> str | None:
+    """Find the Philips API facet id that matches the requested country."""
+
     facets = response_content.get("facets") or []
 
     for facet in facets:
@@ -37,6 +39,8 @@ def discover_country_facet_id(
 
 
 def get_job_postings(response_content: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return only dictionary-shaped job postings from the API response."""
+
     job_postings = response_content.get("jobPostings") or []
     return [
         job_posting
@@ -48,11 +52,13 @@ def get_job_postings(response_content: dict[str, Any]) -> list[dict[str, Any]]:
 def extract_vacancy_links(
     job_postings: list[dict[str, Any]],
     *,
-    links_limit: int | None,
+    links_limit: int,
 ) -> VacancyLinks:
+    """Extract valid Philips vacancy URLs up to the remaining link limit."""
+
     links: set[str] = set()
 
-    if links_limit is not None and links_limit <= 0:
+    if links_limit <= 0:
         return VacancyLinks(links=links)
 
     for job_posting in job_postings:
@@ -64,13 +70,15 @@ def extract_vacancy_links(
             continue
 
         links.add(_build_job_url(external_path))
-        if links_limit is not None and len(links) >= links_limit:
+        if len(links) >= links_limit:
             break
 
     return VacancyLinks(links=links)
 
 
 def _build_job_url(external_path: str) -> str:
+    """Build an absolute Philips careers URL from a job external path."""
+
     normalized_path = (
         external_path if external_path.startswith("/") else f"/{external_path}"
     )

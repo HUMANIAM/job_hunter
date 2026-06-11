@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+import sys
 
 from clients.sources.new_design.types import VacancyLinkRetrievalCriteria, VacancyLinks
 from infra.logging import log
@@ -47,6 +48,13 @@ class VacancyLinkRetriever(ABC):
                 retrieval_progress=progress,
             )
 
+            log(
+                "vacancy link retrieval: retrieved batch "
+                f"batch_size={len(batch.retrieved_links.links)} "
+                f"total_links={len(progress.retrieved_links.links)} "
+                f"iteration={progress.iteration_index}"
+            )
+
             progress.retrieved_links.links.update(batch.retrieved_links.links)
 
             if self._stop_retrieval(progress=progress, batch=batch):
@@ -65,40 +73,6 @@ class VacancyLinkRetriever(ABC):
 
         return progress.retrieved_links
 
-
-    def _stop_retrieval(
-        self,
-        progress: VacancyLinkRetrievalProgress,
-        batch: VacancyLinkBatch,
-    ) -> bool:
-        if batch.next_cursor is None:
-            return True
-
-        links_len = len(progress.retrieved_links.links)
-
-        links_limit = progress.criteria.links_limit
-        if links_limit is not None and links_len >= links_limit:
-            log(
-                "vacancy link retrieval: reached links limit "
-                f"links_limit={links_limit} "
-                f"retrieved_links={links_len}"
-            )
-            return True
-
-        return False
-
-    def _remaining_links_limit(
-        self,
-        retrieval_progress: VacancyLinkRetrievalProgress,
-    ) -> int | None:
-        links_limit = retrieval_progress.criteria.links_limit
-        if links_limit is None:
-            return None
-
-        return max(
-            links_limit - len(retrieval_progress.retrieved_links.links),
-            0,
-        )
 
     @abstractmethod
     def _get_initial_cursor(
@@ -128,3 +102,39 @@ class VacancyLinkRetriever(ABC):
             A VacancyLinkBatch object containing the retrieved links and the next cursor.
         """
         pass
+
+
+    def _stop_retrieval(
+        self,
+        progress: VacancyLinkRetrievalProgress,
+        batch: VacancyLinkBatch,
+    ) -> bool:
+        if batch.next_cursor is None:
+            return True
+
+        links_len = len(progress.retrieved_links.links)
+
+        links_limit = progress.criteria.links_limit
+        if links_limit is not None and links_len >= links_limit:
+            log(
+                "vacancy link retrieval: reached links limit "
+                f"links_limit={links_limit} "
+                f"retrieved_links={links_len}"
+            )
+            return True
+
+        return False
+
+    def _remaining_links_limit(
+        self,
+        retrieval_progress: VacancyLinkRetrievalProgress,
+    ) -> int:
+        links_limit = retrieval_progress.criteria.links_limit
+        if links_limit is None:
+            return sys.maxsize
+
+        return max(
+            links_limit - len(retrieval_progress.retrieved_links.links),
+            0,
+        )
+

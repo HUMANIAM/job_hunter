@@ -38,6 +38,7 @@ class PhilipsVacancyLinkRetriever(vlr.VacancyLinkRetriever):
             response.content,
             country=country,
         )
+
         if not country_facet_id:
             log(
                 f"PhilipsVacancyLinkRetriever: "
