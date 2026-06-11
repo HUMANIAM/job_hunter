@@ -1,8 +1,20 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+from typing import Iterator
+
 import pytest
 
 from clients.clients import Client
+from clients.sources.new_design import vacancy_source_registery as registry_module
+from clients.sources.new_design.browser_access import (
+    BrowserAccess,
+    DOMElement,
+    Selector,
+    SelectorList,
+)
+from clients.sources.new_design.sioux import sioux_config as sioux_config
+from clients.sources.new_design.tests.data.dom import FakeDOMElement
 from clients.sources.new_design.types import VacancyLinkRetrievalCriteria, VacancyLinks
 from clients.sources.new_design.vacancy_source import VacancySource
 from clients.sources.new_design.vacancy_source_registery import (
@@ -18,6 +30,56 @@ class FakeVacancySource(VacancySource):
         criteria: VacancyLinkRetrievalCriteria | None = None,
     ) -> VacancyLinks:
         return VacancyLinks(links=set())
+
+
+class FakeBrowserAccess(BrowserAccess):
+    def __init__(
+        self,
+        elements_by_url: dict[str, dict[Selector, list[DOMElement]]],
+    ) -> None:
+        self._elements_by_url = elements_by_url
+        self._current_url = ""
+
+    def open_url(
+        self,
+        url: str,
+        *,
+        wait_for_selectors: SelectorList = (),
+        click_if_visible_selectors: SelectorList = (),
+    ) -> None:
+        self._current_url = url
+
+    def find_elements(self, selector: Selector) -> list[DOMElement]:
+        return self._elements_by_url[self._current_url].get(selector, [])
+
+    def current_url(self) -> str:
+        return self._current_url
+
+
+@contextmanager
+def fake_playwright_browser_access_create() -> Iterator[BrowserAccess]:
+    facet_url = "https://vacancy.sioux.eu/software"
+    yield FakeBrowserAccess(
+        {
+            sioux_config.SIOUX_ENTRY_URL: {
+                sioux_config.SIOUX_DISCIPLINE_FACET_SELECTOR: [
+                    FakeDOMElement(
+                        attributes={"href": facet_url},
+                        text_by_selector={
+                            ".filter-item-link-name": "Software",
+                            ".filter-item-link-count": "1",
+                        },
+                    ),
+                ],
+            },
+            facet_url: {
+                sioux_config.SIOUX_RESULTS_READY_SELECTOR: [
+                    FakeDOMElement(attributes={"href": "/vacancies/one.html"}),
+                ],
+                sioux_config.SIOUX_NEXT_PAGE_SELECTOR: [],
+            },
+        }
+    )
 
 
 def test_registry_reuses_source_instance_for_same_client() -> None:
@@ -44,8 +106,27 @@ def test_registry_raises_for_unregistered_client() -> None:
         registry.get_vacancy_source(Client.PHILIPS)
 
 
-def test_registry_provider_registers_philips_source() -> None:
+def test_registry_provider_registers_philips_source(monkeypatch) -> None:
+    monkeypatch.setattr(
+        registry_module,
+        "create_playwright_browser_access",
+        fake_playwright_browser_access_create,
+    )
+
     with create_vacancy_source_registry() as registry:
         source = registry.get_vacancy_source(Client.PHILIPS)
+
+    assert isinstance(source, VacancySource)
+
+
+def test_registry_provider_registers_sioux_source(monkeypatch) -> None:
+    monkeypatch.setattr(
+        registry_module,
+        "create_playwright_browser_access",
+        fake_playwright_browser_access_create,
+    )
+
+    with create_vacancy_source_registry() as registry:
+        source = registry.get_vacancy_source(Client.SIOUX)
 
     assert isinstance(source, VacancySource)
