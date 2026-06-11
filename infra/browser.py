@@ -93,6 +93,9 @@ def open_and_prepare_page(
         wait_settle_ms: Extra delay after DOM load to let UI updates settle.
         click_timeout_ms: Maximum time allowed for each click action.
         click_settle_ms: Extra delay after each click to let UI updates settle.
+
+    Returns:
+        Selectors that were found visible and clicked.
     """
     open_page(
         page,
