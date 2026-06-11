@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from unittest.mock import Mock
 
-from clients.candidate_profiling.candidate_repo import (
+from MVP.candidate_profiling.candidate_repo import (
     CandidateProfileRepository,
     _profile_to_json_columns,
 )
-from tests.unit.clients.data.candidate import (
+from tests.data.candidate import (
     make_candidate_profile,
     make_candidate_profile_record,
 )

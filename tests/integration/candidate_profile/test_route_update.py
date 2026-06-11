@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from uuid import uuid4
 
-from clients.candidate_profiling.candidate_profiling_model import (
+from MVP.candidate_profiling.candidate_profiling_model import (
     CandidateProfileRecord,
 )
 from tests.data.candidate import make_candidate_profile_endpoint_record

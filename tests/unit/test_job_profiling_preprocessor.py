@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from clients.job_profiling.preprocessing import job_profiling_preporcessor as preprocessor_module
-from clients.job_profiling.preprocessing.cleaned_job_html import CleanedJobHtml
-from clients.job_profiling.preprocessing.job_profiling_preporcessor import (
+from MVP.job_profiling.preprocessing import job_profiling_preporcessor as preprocessor_module
+from MVP.job_profiling.preprocessing.cleaned_job_html import CleanedJobHtml
+from MVP.job_profiling.preprocessing.job_profiling_preporcessor import (
     DEFAULT_JOB_HTML_SIGNAL_CLEANER_MAX_COMPLETION_TOKENS,
     JobProfilingPreprocessor,
     _JOB_HTML_SIGNAL_CLEANER_LLM_MODEL,

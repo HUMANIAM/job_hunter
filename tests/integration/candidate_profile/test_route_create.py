@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from clients.candidate_profiling.candidate_profiling_model import CandidateProfileRecord
+from MVP.candidate_profiling.candidate_profiling_model import CandidateProfileRecord
 from tests.helpers.db import select_where_in
 
 

@@ -19,7 +19,7 @@ if "playwright.sync_api" not in sys.modules:
     sys.modules["playwright"] = playwright
     sys.modules["playwright.sync_api"] = sync_api
 
-from clients import clients_cli
+from MVP import clients_cli
 from reporting.writer import raw_html_filename
 
 

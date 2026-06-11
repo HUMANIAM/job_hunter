@@ -18,8 +18,8 @@ if "playwright.sync_api" not in sys.modules:
     sys.modules["playwright"] = playwright
     sys.modules["playwright.sync_api"] = sync_api
 
-from clients.sources.browser_listing_adapter import AdvanceDecision, PageAdvance
-from clients.sources.vanderlande.adapter import VanderlandeClientAdapter
+from MVP.sources.browser_listing_adapter import AdvanceDecision, PageAdvance
+from MVP.sources.vanderlande.adapter import VanderlandeClientAdapter
 
 
 class _FakeContext:
@@ -253,7 +253,7 @@ def test_transform_downloaded_html_delegates_to_renderer(
     calls: list[str] = []
 
     monkeypatch.setattr(
-        "clients.sources.vanderlande.adapter.render_vanderlande_job_html",
+        "MVP.sources.vanderlande.adapter.render_vanderlande_job_html",
         lambda html_content: calls.append(html_content) or renderer_result,
     )
 

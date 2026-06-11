@@ -5,9 +5,9 @@ from urllib.parse import quote
 import pytest
 import requests
 
-from clients.sources.api_listing_adapter import APIPageResult
-from clients.sources.canon import adapter as canon_adapter_module
-from clients.sources.canon.adapter import (
+from MVP.sources.api_listing_adapter import APIPageResult
+from MVP.sources.canon import adapter as canon_adapter_module
+from MVP.sources.canon.adapter import (
     API_URL,
     REQUEST_TIMEOUT_SECONDS,
     CanonAPIListingAdapter,

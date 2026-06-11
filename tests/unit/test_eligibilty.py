@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from clients.candidate_profiling.candidate_profile_llm_schema import CandidateProfile
-from clients.eligibility import eligibilty as eligibilty_module
-from clients.eligibility.eligibility_response_model import EligibilityResponse
-from clients.job_profiling.profiling.job_profile_schema import VacancyProfile
+from MVP.candidate_profiling.candidate_profile_llm_schema import CandidateProfile
+from MVP.eligibility import eligibilty as eligibilty_module
+from MVP.eligibility.eligibility_response_model import EligibilityResponse
+from MVP.job_profiling.profiling.job_profile_schema import VacancyProfile
 
 
 def test_render_eligibilty_user_message_uses_input_view_maps(monkeypatch) -> None:

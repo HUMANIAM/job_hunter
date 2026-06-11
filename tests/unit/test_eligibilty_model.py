@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from clients.eligibility.eligibility_response_model import EligibilityResponse
+from MVP.eligibility.eligibility_response_model import EligibilityResponse
 
 
 def test_eligibility_response_accepts_valid_assessments() -> None:

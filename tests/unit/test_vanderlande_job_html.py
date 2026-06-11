@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from clients.sources.vanderlande.job_html import (
+from MVP.sources.vanderlande.job_html import (
     extract_vanderlande_job_posting,
     is_vanderlande_workday_job_html,
     render_vanderlande_job_html,

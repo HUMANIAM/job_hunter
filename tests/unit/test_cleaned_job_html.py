@@ -3,7 +3,7 @@ from typing import Dict
 import pytest
 from pydantic import ValidationError
 
-from clients.job_profiling.preprocessing.cleaned_job_html import (
+from MVP.job_profiling.preprocessing.cleaned_job_html import (
     CleanedJobHtml,
     CleanedJobHtmlLine,
 )

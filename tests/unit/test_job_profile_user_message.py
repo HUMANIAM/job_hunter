@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from clients.job_profiling.profiling.job_profile_user_message import (
+from MVP.job_profiling.profiling.job_profile_user_message import (
     render_job_profile_user_message,
 )
 

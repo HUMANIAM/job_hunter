@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from unittest.mock import Mock
 
-from clients.candidate_profiling import candidate_service
-from clients.candidate_profiling.candidate_profile_schema import (
+from MVP.candidate_profiling import candidate_service
+from MVP.candidate_profiling.candidate_profile_schema import (
     CandidateProfileCreate,
     CandidateProfileUpdate,
 )

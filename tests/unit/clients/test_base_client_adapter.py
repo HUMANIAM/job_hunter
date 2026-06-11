@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from clients.base import BaseClientAdapter
+from MVP.base import BaseClientAdapter
 
 
 class _ConcreteAdapter(BaseClientAdapter):

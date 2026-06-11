@@ -11,10 +11,10 @@ from sqlalchemy.engine import make_url
 from pytest_postgresql import factories
 from sqlmodel import Session, SQLModel, create_engine
 
-from clients.candidate_profiling.candidate_route import router as candidate_router
+from MVP.candidate_profiling.candidate_route import router as candidate_router
 from infra.db import get_session
 
-from clients.health import router as health_router
+from MVP.health import router as health_router
 from core.config import get_settings
 from core.constants import JOB_HUNTER_API_TITLE
 from core.exception_handlers import register_exception_handlers

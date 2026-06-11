@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from clients.sources.api_listing_adapter import APIListingAdapter, APIPageResult
+from MVP.sources.api_listing_adapter import APIListingAdapter, APIPageResult
 from infra import logging as infra_logging
 
 

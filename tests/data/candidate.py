@@ -1,7 +1,7 @@
 from __future__ import annotations
 from copy import deepcopy
 
-from clients.candidate_profiling.candidate_profiling_model import (
+from MVP.candidate_profiling.candidate_profiling_model import (
     CandidateProfile,
     CandidateProfileRecord,
 )

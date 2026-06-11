@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from clients.candidate_profiling import candidate_profiling_cli
+from MVP.candidate_profiling import candidate_profiling_cli
 
 
 class FakeCandidateProfile:

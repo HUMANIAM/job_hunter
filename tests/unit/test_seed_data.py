@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import Mock
 
-from clients.candidate_profiling.candidate_profiling_model import CandidateProfile
+from MVP.candidate_profiling.candidate_profiling_model import CandidateProfile
 from scripts import seed_data
 from tests.data.candidate import (
     make_candidate_profile_endpoint_record,

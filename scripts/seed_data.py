@@ -10,11 +10,11 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from clients.candidate_profiling.candidate_profiling_model import (
+from MVP.candidate_profiling.candidate_profiling_model import (
     CandidateProfile,
     CandidateProfileRecord,
 )
-from clients.candidate_profiling.candidate_repo import CandidateProfileRepository
+from MVP.candidate_profiling.candidate_repo import CandidateProfileRepository
 from infra.db import create_db_and_tables, get_engine
 from tests.data.candidate import make_candidate_profile_endpoint_record
 

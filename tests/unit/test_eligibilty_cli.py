@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from clients.eligibility import eligibility_cli
+from MVP.eligibility import eligibility_cli
 
 
 class FakeEligibilityResponse:

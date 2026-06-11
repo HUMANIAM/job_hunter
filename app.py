@@ -9,8 +9,8 @@ from core.constants import JOB_HUNTER_API_TITLE as APP_TITLE
 from core.exception_handlers import register_exception_handlers
 from core.logging import setup_logging
 from infra.db import create_db_and_tables
-from clients.candidate_profiling.candidate_route import router as candidate_router
-from clients.health import router as health_router
+from MVP.candidate_profiling.candidate_route import router as candidate_router
+from MVP.health import router as health_router
 
 logger = logging.getLogger(__name__)
 

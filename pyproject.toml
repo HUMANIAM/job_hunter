@@ -32,7 +32,7 @@ fetch-jobs = "fetch_jobs:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["scripts*", "ui*", "shared*", "clients*"]
+include = ["scripts*", "ui*", "shared*", "MVP*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

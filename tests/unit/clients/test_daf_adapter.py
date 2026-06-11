@@ -16,11 +16,11 @@ if "playwright.sync_api" not in sys.modules:
     sys.modules["playwright"] = playwright
     sys.modules["playwright.sync_api"] = sync_api
 
-from clients.sources.browser_listing_adapter import AdvanceDecision, PageAdvance
-from clients.sources.browser_listing_adapter import (
+from MVP.sources.browser_listing_adapter import AdvanceDecision, PageAdvance
+from MVP.sources.browser_listing_adapter import (
     BrowserListingAdapter,
 )
-from clients.sources.daf.adapter import DafClientAdapter
+from MVP.sources.daf.adapter import DafClientAdapter
 
 
 class FakeAnchor:

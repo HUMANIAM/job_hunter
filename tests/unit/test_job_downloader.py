@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from types import SimpleNamespace
 
-from clients.job_downloader import Page, download_job_html_pages
+from MVP.job_downloader import Page, download_job_html_pages
 
 
 def _yield(value: object):
@@ -37,15 +37,15 @@ def test_download_job_html_pages_uses_adapter_transform(monkeypatch) -> None:
     adapter = FakeAdapter()
 
     monkeypatch.setattr(
-        "clients.job_downloader.open_page",
+        "MVP.job_downloader.open_page",
         lambda page, link: opened_links.append(link),
     )
     monkeypatch.setattr(
-        "clients.job_downloader.capture_page_title",
+        "MVP.job_downloader.capture_page_title",
         lambda page: "Original Title",
     )
     monkeypatch.setattr(
-        "clients.job_downloader.capture_page_html",
+        "MVP.job_downloader.capture_page_html",
         lambda page: "<html><body>original</body></html>",
     )
 

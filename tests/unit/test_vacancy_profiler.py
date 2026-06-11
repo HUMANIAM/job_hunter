@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import clients.job_profiling.profiling.profiling as vacancy_profiler_module
-import clients.profiling.profiling as shared_profiler_module
-from clients.job_profiling.profiling.job_profile_schema import VacancyProfile
+import MVP.job_profiling.profiling.profiling as vacancy_profiler_module
+import MVP.profiling.profiling as shared_profiler_module
+from MVP.job_profiling.profiling.job_profile_schema import VacancyProfile
 
 
 def test_profile_extractor_system_message_composes_common_rules() -> None:

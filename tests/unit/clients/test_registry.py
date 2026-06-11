@@ -18,13 +18,13 @@ if "playwright.sync_api" not in sys.modules:
     sys.modules["playwright"] = playwright
     sys.modules["playwright.sync_api"] = sync_api
 
-from clients.clients import Client
-from clients.registry import get_client_adapter
-from clients.sources.asml.adapter import AsmlClientAdapter
-from clients.sources.canon.adapter import CanonAPIListingAdapter
-from clients.sources.daf.adapter import DafClientAdapter
-from clients.sources.philips.adapter import PhilipsAPIListingAdapter
-from clients.sources.sioux.adapter import SiouxBrowserListingAdapter
+from MVP.clients import Client
+from MVP.registry import get_client_adapter
+from MVP.sources.asml.adapter import AsmlClientAdapter
+from MVP.sources.canon.adapter import CanonAPIListingAdapter
+from MVP.sources.daf.adapter import DafClientAdapter
+from MVP.sources.philips.adapter import PhilipsAPIListingAdapter
+from MVP.sources.sioux.adapter import SiouxBrowserListingAdapter
 
 
 def test_get_client_adapter_returns_registered_asml_adapter() -> None:

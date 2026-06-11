@@ -3,9 +3,9 @@ from __future__ import annotations
 import pytest
 import requests
 
-from clients.sources.api_listing_adapter import APIPageResult
-from clients.sources.philips import adapter as philips_adapter_module
-from clients.sources.philips.adapter import (
+from MVP.sources.api_listing_adapter import APIPageResult
+from MVP.sources.philips import adapter as philips_adapter_module
+from MVP.sources.philips.adapter import (
     API_URL,
     DEFAULT_MAX_ATTEMPTS,
     ENTRY_URL,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from clients.candidate_profiling.candidate_profiling_model import CandidateProfile
+from MVP.candidate_profiling.candidate_profiling_model import CandidateProfile
 from tests.data.candidate import make_candidate_profile
 
 

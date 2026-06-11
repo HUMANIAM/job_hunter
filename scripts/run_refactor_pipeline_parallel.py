@@ -256,7 +256,7 @@ def run_company_pipeline(
         preprocessing_command = [
             python_executable,
             "-m",
-            "clients.job_profiling.job_profiling_cli",
+            "MVP.job_profiling.job_profiling_cli",
             str(html_dir),
             "--pipeline",
             "pre",
@@ -286,7 +286,7 @@ def run_company_pipeline(
         extraction_command = [
             python_executable,
             "-m",
-            "clients.job_profiling.job_profiling_cli",
+            "MVP.job_profiling.job_profiling_cli",
             str(pre_dir),
             "--pipeline",
             "ext",
@@ -316,7 +316,7 @@ def run_company_pipeline(
         eligibility_command = [
             python_executable,
             "-m",
-            "clients.eligibility.eligibility_cli",
+            "MVP.eligibility.eligibility_cli",
             str(candidate_profile),
             str(profiles_dir),
             str(eligibility_root),

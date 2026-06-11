@@ -17,7 +17,7 @@ if "playwright.sync_api" not in sys.modules:
     sys.modules["playwright"] = playwright
     sys.modules["playwright.sync_api"] = sync_api
 
-from clients.job_downloader import Page, download_job_html_pages
+from MVP.job_downloader import Page, download_job_html_pages
 
 
 class FakePage:

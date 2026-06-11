@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from clients.candidate_profiling.candidate_profile_llm_schema import CandidateProfile
-from clients.eligibility.eligibility_input_view import EligibilityInputView
-from clients.job_profiling.profiling.job_profile_schema import VacancyProfile
+from MVP.candidate_profiling.candidate_profile_llm_schema import CandidateProfile
+from MVP.eligibility.eligibility_input_view import EligibilityInputView
+from MVP.job_profiling.profiling.job_profile_schema import VacancyProfile
 
 
 def test_get_candidate_view_returns_candidate_prompt_fields() -> None:
